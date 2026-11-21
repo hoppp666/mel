@@ -14,6 +14,34 @@
   },
   "batches": [
     {
+      "batchId": "RBATCH-0004",
+      "collection": "romantic",
+      "status": "completed",
+      "targetCount": 4,
+      "processedUrls": [
+        "psychologytoday.com/us/blog/un-numb/202611/6-signs-grand-theft-auto-vi-is-coming-between-you-and-your-partner",
+        "psychologytoday.com/us/blog/mind-matters/202611/how-to-navigate-seasonal-affective-disorder-as-a-couple",
+        "psychologytoday.com/us/blog/love-lies-and-conflict/202611/the-best-way-to-respond-after-a-fight",
+        "psychologytoday.com/us/blog/media-spotlight/202611/can-ai-companions-really-help-us-feel-less-lonely",
+        "psychologytoday.com/us/blog/the-relearning-curve/202611/why-30-ideas-for-fixing-us-schools-missed-the-plot",
+        "psychologytoday.com/us/blog/self-made/202611/5-evidence-based-treatments-for-borderline-personality-disorder",
+        "psychologytoday.com/us/blog/meet-catch-and-keep/202611/is-your-obsession-actually-limerence",
+        "psychologytoday.com/us/blog/changepower/202611/why-you-may-need-an-elevator-message-about-healthy-aging",
+        "yourtango.com/family/experiences-gen-z-thinks-normal-freak-out-gen-x-parents",
+        "yourtango.com/self/people-write-things-down-physical-planner-instead-phone-superior-humans-experts-say",
+        "yourtango.com/zodiac/zodiac-signs-manifestations-come-true-angel-number-day-1122-november-22-2026",
+        "yourtango.com/self/kids-born-70s-80s-had-daily-annoyances-gen-z-cant-imagine"
+      ],
+      "discoveredCount": 12,
+      "newUniqueCount": 4,
+      "duplicateCount": 8,
+      "analyzedCount": 8,
+      "pendingAnalysisCount": 0,
+      "failedCount": 0,
+      "startedAt": "2026-11-21T11:27:44.726Z",
+      "finishedAt": "2026-11-21T11:32:55.818Z"
+    },
+    {
       "batchId": "RBATCH-0003",
       "collection": "debate",
       "status": "completed",
@@ -89,14 +117,65 @@
       "lastError": "Превышена квота Gemini API (429 RESOURCE_EXHAUSTED). Дождитесь суточного сброса лимита или подключите ключ с расширенным тарифом в Settings > Secrets."
     }
   ],
-  "nextScheduledResearchAt": "2026-11-21T13:06:20.266Z",
+  "nextScheduledResearchAt": "2026-11-21T15:32:55.819Z",
   "publishedTodayDate": "2026-11-21",
-  "publishedTodayCount": 0,
-  "totalDiscoveredMaterials": 24,
+  "publishedTodayCount": 1,
+  "totalDiscoveredMaterials": 36,
   "totalUniqueStoriesSaved": 0,
-  "totalPublicationsCreated": 0,
-  "totalPublishedToTelegram": 0,
+  "totalPublicationsCreated": 3,
+  "totalPublishedToTelegram": 1,
   "runHistory": [
+    {
+      "runId": "RUN-MWQC0JCI",
+      "kind": "publish",
+      "mode": "github_actions",
+      "startedAt": "2026-11-21T11:35:42.424Z",
+      "finishedAt": "2026-11-21T11:35:45.905Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 1,
+      "summary": "Опубликовано в Telegram: PUB-D-999102 (message_id=3). Ожидает подтверждения Дзена."
+    },
+    {
+      "runId": "RUN-MWQC0GNQ",
+      "kind": "production",
+      "mode": "github_actions",
+      "startedAt": "2026-11-21T11:32:55.820Z",
+      "finishedAt": "2026-11-21T11:35:42.422Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 3,
+      "publishedToTelegram": 0,
+      "summary": "Обработано сюжетов: 3, создано публикаций: 3."
+    },
+    {
+      "runId": "RUN-MWQBWW3V",
+      "kind": "research",
+      "mode": "github_actions",
+      "startedAt": "2026-11-21T11:27:44.726Z",
+      "finishedAt": "2026-11-21T11:32:55.818Z",
+      "ok": true,
+      "discovered": 12,
+      "uniqueAdded": 4,
+      "duplicates": 8,
+      "analyzed": 8,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 0,
+      "summary": "Партия RBATCH-0004 (romantic): найдено 12, новых 4, дубликатов 8, проанализировано 8, в базу сюжетов 0."
+    },
     {
       "runId": "RUN-MWQ316SZ",
       "kind": "publish",
@@ -291,10 +370,10 @@
       "error": "Превышена квота Gemini API (429 RESOURCE_EXHAUSTED). Дождитесь суточного сброса лимита или подключите ключ с расширенным тарифом в Settings > Secrets."
     }
   ],
-  "lastCollectionUsed": "debate",
-  "lastResearchRunAt": "2026-11-21T07:06:20.265Z",
-  "lastResearchError": "Модель Gemini временно перегружена (503 UNAVAILABLE). Повторите запрос чуть позже.",
-  "lastProductionRunAt": "2026-11-21T07:09:28.873Z",
-  "lastProductionError": "Таймаут запроса (40с)",
-  "lastPublishRunAt": "2026-11-21T07:24:19.763Z"
+  "lastCollectionUsed": "romantic",
+  "lastResearchRunAt": "2026-11-21T11:32:55.818Z",
+  "lastProductionRunAt": "2026-11-21T11:35:42.422Z",
+  "lastPublishRunAt": "2026-11-21T11:35:45.905Z",
+  "nextScheduledPublishAt": "2026-11-21T13:35:45.905Z",
+  "lastSuccessfulTelegramAt": "2026-11-21T11:35:45.905Z"
 }
