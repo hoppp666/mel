@@ -621,16 +621,17 @@ test('Scenario 8: GitHub Actions workflows have schedule, workflow_dispatch, con
   );
 
   assert.ok(researchYml.includes('schedule:'));
-  assert.ok(researchYml.includes("cron: '0 */6 * * *'"));
+  assert.ok(researchYml.includes("cron: '0 */4 * * *'"));
   assert.ok(researchYml.includes('workflow_dispatch:'));
   assert.ok(researchYml.includes('group: melo-love-autonomous-data'));
   assert.ok(researchYml.includes('[skip ci]'));
-  assert.ok(researchYml.includes('models: read'));
-  assert.ok(researchYml.includes('secrets.GITHUB_TOKEN'));
-  assert.ok(researchYml.includes('openai/gpt-4o'));
+  assert.ok(researchYml.includes('contents: write'));
+  assert.ok(researchYml.includes('secrets.GEMINI_API_KEY'));
+  assert.ok(researchYml.includes('secrets.GIGACHAT_AUTH_KEY'));
+  assert.ok(researchYml.includes('GIGACHAT_SCOPE'));
 
   assert.ok(publishYml.includes('schedule:'));
-  assert.ok(publishYml.includes("cron: '0 */3 * * *'"));
+  assert.ok(publishYml.includes("cron: '0 */2 * * *'"));
   assert.ok(publishYml.includes('group: melo-love-autonomous-data'));
   assert.ok(publishYml.includes('TELEGRAM_AUTO_SEND_ENABLED'));
 });

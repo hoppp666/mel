@@ -16,7 +16,11 @@ import {
   runEditorialDiagnostics,
   TELEGRAM_SAFE_CHAR_LIMIT,
 } from '../src/shared/publishingUtils.js';
-import { isAiConfigured } from './aiClient.js';
+import {
+  isAiConfigured,
+  isGeminiPrimaryConfigured,
+  isGigaChatConfigured,
+} from './aiClient.js';
 
 export const PUBLICATIONS_PATH = path.join(DATA_DIR, 'publications.json');
 export const PUBLISHING_SETTINGS_PATH = path.join(DATA_DIR, 'publishing_settings.json');
@@ -189,6 +193,8 @@ export function getTelegramIntegrationStatus(): TelegramIntegrationStatus {
     hasBotTokenConfigured: Boolean(token && token !== 'MY_TELEGRAM_BOT_TOKEN'),
     hasChannelConfigured: Boolean(channel && channel !== 'MY_TELEGRAM_CHANNEL_ID'),
     hasGeminiConfigured: isAiConfigured(),
+    hasGeminiPrimaryConfigured: isGeminiPrimaryConfigured(),
+    hasGigaChatConfigured: isGigaChatConfigured(),
     hasSupabaseConfigured: Boolean(
       supaUrl &&
         supaUrl !== 'MY_SUPABASE_URL' &&

@@ -697,7 +697,7 @@ export const AutonomousSchedulerSection: React.FC<AutonomousSchedulerSectionProp
                 max={48}
                 value={cfgForm.researchIntervalHours}
                 onChange={(e) =>
-                  setCfgForm({ ...cfgForm, researchIntervalHours: Number(e.target.value) || 6 })
+                  setCfgForm({ ...cfgForm, researchIntervalHours: Number(e.target.value) || 4 })
                 }
                 className="mt-1 w-full rounded border border-stone-200 px-3 py-2 font-mono text-sm tabular-nums"
               />
@@ -723,7 +723,7 @@ export const AutonomousSchedulerSection: React.FC<AutonomousSchedulerSectionProp
                 max={5}
                 value={cfgForm.productionBatchSize}
                 onChange={(e) =>
-                  setCfgForm({ ...cfgForm, productionBatchSize: Number(e.target.value) || 2 })
+                  setCfgForm({ ...cfgForm, productionBatchSize: Number(e.target.value) || 3 })
                 }
                 className="mt-1 w-full rounded border border-stone-200 px-3 py-2 font-mono text-sm tabular-nums"
               />
@@ -739,7 +739,7 @@ export const AutonomousSchedulerSection: React.FC<AutonomousSchedulerSectionProp
                 max={24}
                 value={cfgForm.publishMinIntervalHours}
                 onChange={(e) =>
-                  setCfgForm({ ...cfgForm, publishMinIntervalHours: Number(e.target.value) || 3 })
+                  setCfgForm({ ...cfgForm, publishMinIntervalHours: Number(e.target.value) || 2 })
                 }
                 className="mt-1 w-full rounded border border-stone-200 px-3 py-2 font-mono text-sm tabular-nums"
               />
@@ -752,7 +752,7 @@ export const AutonomousSchedulerSection: React.FC<AutonomousSchedulerSectionProp
                 max={12}
                 value={cfgForm.maxPublishesPerDay}
                 onChange={(e) =>
-                  setCfgForm({ ...cfgForm, maxPublishesPerDay: Number(e.target.value) || 4 })
+                  setCfgForm({ ...cfgForm, maxPublishesPerDay: Number(e.target.value) || 12 })
                 }
                 className="mt-1 w-full rounded border border-stone-200 px-3 py-2 font-mono text-sm tabular-nums"
               />

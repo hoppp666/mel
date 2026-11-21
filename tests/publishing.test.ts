@@ -26,6 +26,12 @@ import {
 } from '../server/publishingStorage.js';
 import { getGeminiClient, isGeminiConfigured } from '../server/geminiClient.js';
 import {
+  callChatCompletionJson,
+  resolveGeminiModelList,
+  resolveGigaChatCredentials,
+  setGigaChatTransportForTest,
+} from '../server/aiClient.js';
+import {
   prepareOrRunSupabaseMigration,
   verifyAllDataIntegrity,
 } from '../server/supabaseMigration.js';
@@ -281,14 +287,21 @@ test('verifyAllDataIntegrity & prepareOrRunSupabaseMigration create 4-module bac
   assert.equal(fs.existsSync('supabase/schema.sql'), true);
 });
 
-test('all integrations operate non-blockingly when GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, and SUPABASE_* are unset', async () => {
+test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, TELEGRAM_BOT_TOKEN, and SUPABASE_* are unset', async () => {
   const snapPubs = snapshotFile(PUBLICATIONS_PATH);
   const snapSettings = snapshotFile(PUBLISHING_SETTINGS_PATH);
   const snapLogs = snapshotFile(PUBLISHING_LOGS_PATH);
   const prevGemini = process.env.GEMINI_API_KEY;
-  const prevGhToken = process.env.GITHUB_TOKEN;
-  const prevGhModels = process.env.GITHUB_MODELS_TOKEN;
-  const prevGhModelsAlt = process.env.GH_MODELS_TOKEN;
+  const prevGigaAuth = process.env.GIGACHAT_AUTH_KEY;
+  const prevGigaCreds = process.env.GIGACHAT_CREDENTIALS;
+  const prevGigaKey = process.env.GIGACHAT_API_KEY;
+  const prevGigaClientId = process.env.GIGACHAT_CLIENT_ID;
+  const prevGigaClientSecret = process.env.GIGACHAT_CLIENT_SECRET;
+  const prevGigaScope = process.env.GIGACHAT_SCOPE;
+  const prevGroq = process.env.GROQ_API_KEY;
+  const prevAiKey = process.env.AI_API_KEY;
+  const prevGroqEndpoint = process.env.GROQ_API_ENDPOINT;
+  const prevAiEndpoint = process.env.AI_ENDPOINT;
   const prevOpenAi = process.env.OPENAI_API_KEY;
   const prevTg = process.env.TELEGRAM_BOT_TOKEN;
   const prevCh = process.env.TELEGRAM_CHANNEL_ID;
@@ -297,9 +310,16 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, TELEGRAM_BOT_
 
   try {
     delete process.env.GEMINI_API_KEY;
-    delete process.env.GITHUB_TOKEN;
-    delete process.env.GITHUB_MODELS_TOKEN;
-    delete process.env.GH_MODELS_TOKEN;
+    delete process.env.GIGACHAT_AUTH_KEY;
+    delete process.env.GIGACHAT_CREDENTIALS;
+    delete process.env.GIGACHAT_API_KEY;
+    delete process.env.GIGACHAT_CLIENT_ID;
+    delete process.env.GIGACHAT_CLIENT_SECRET;
+    delete process.env.GIGACHAT_SCOPE;
+    delete process.env.GROQ_API_KEY;
+    delete process.env.AI_API_KEY;
+    delete process.env.GROQ_API_ENDPOINT;
+    delete process.env.AI_ENDPOINT;
     delete process.env.OPENAI_API_KEY;
     delete process.env.TELEGRAM_BOT_TOKEN;
     delete process.env.TELEGRAM_CHANNEL_ID;
@@ -309,12 +329,14 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, TELEGRAM_BOT_
     // 1. Integration status returns false booleans cleanly without throwing or leaking secrets
     const status = getTelegramIntegrationStatus();
     assert.equal(status.hasGeminiConfigured, false);
+    assert.equal(status.hasGeminiPrimaryConfigured, false);
+    assert.equal(status.hasGigaChatConfigured, false);
     assert.equal(status.hasBotTokenConfigured, false);
     assert.equal(status.hasSupabaseConfigured, false);
 
     // 2. AI API check reports unconfigured calmly, without crashing module
     assert.equal(isGeminiConfigured(), false);
-    assert.throws(() => getGeminiClient(), /API_KEY_MISSING|GITHUB_MODELS_TOKEN|GitHub Models/);
+    assert.throws(() => getGeminiClient(), /API_KEY_MISSING|GEMINI_API_KEY|GIGACHAT_AUTH_KEY/);
 
     // 3. Telegram connection check returns structured non-throwing note
     const tgTest = await testTelegramConnection();
@@ -336,12 +358,26 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, TELEGRAM_BOT_
   } finally {
     if (prevGemini === undefined) delete process.env.GEMINI_API_KEY;
     else process.env.GEMINI_API_KEY = prevGemini;
-    if (prevGhToken === undefined) delete process.env.GITHUB_TOKEN;
-    else process.env.GITHUB_TOKEN = prevGhToken;
-    if (prevGhModels === undefined) delete process.env.GITHUB_MODELS_TOKEN;
-    else process.env.GITHUB_MODELS_TOKEN = prevGhModels;
-    if (prevGhModelsAlt === undefined) delete process.env.GH_MODELS_TOKEN;
-    else process.env.GH_MODELS_TOKEN = prevGhModelsAlt;
+    if (prevGigaAuth === undefined) delete process.env.GIGACHAT_AUTH_KEY;
+    else process.env.GIGACHAT_AUTH_KEY = prevGigaAuth;
+    if (prevGigaCreds === undefined) delete process.env.GIGACHAT_CREDENTIALS;
+    else process.env.GIGACHAT_CREDENTIALS = prevGigaCreds;
+    if (prevGigaKey === undefined) delete process.env.GIGACHAT_API_KEY;
+    else process.env.GIGACHAT_API_KEY = prevGigaKey;
+    if (prevGigaClientId === undefined) delete process.env.GIGACHAT_CLIENT_ID;
+    else process.env.GIGACHAT_CLIENT_ID = prevGigaClientId;
+    if (prevGigaClientSecret === undefined) delete process.env.GIGACHAT_CLIENT_SECRET;
+    else process.env.GIGACHAT_CLIENT_SECRET = prevGigaClientSecret;
+    if (prevGigaScope === undefined) delete process.env.GIGACHAT_SCOPE;
+    else process.env.GIGACHAT_SCOPE = prevGigaScope;
+    if (prevGroq === undefined) delete process.env.GROQ_API_KEY;
+    else process.env.GROQ_API_KEY = prevGroq;
+    if (prevAiKey === undefined) delete process.env.AI_API_KEY;
+    else process.env.AI_API_KEY = prevAiKey;
+    if (prevGroqEndpoint === undefined) delete process.env.GROQ_API_ENDPOINT;
+    else process.env.GROQ_API_ENDPOINT = prevGroqEndpoint;
+    if (prevAiEndpoint === undefined) delete process.env.AI_ENDPOINT;
+    else process.env.AI_ENDPOINT = prevAiEndpoint;
     if (prevOpenAi === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = prevOpenAi;
     if (prevTg === undefined) delete process.env.TELEGRAM_BOT_TOKEN;
@@ -355,5 +391,93 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, TELEGRAM_BOT_
     restoreFile(PUBLICATIONS_PATH, snapPubs);
     restoreFile(PUBLISHING_SETTINGS_PATH, snapSettings);
     restoreFile(PUBLISHING_LOGS_PATH, snapLogs);
+  }
+});
+
+test('Gemini model cascade includes free fallback and GigaChat OAuth + model failover works when primary returns 503', async () => {
+  const models = resolveGeminiModelList();
+  assert.equal(models[0], 'gemini-4-hydrogen');
+  assert.ok(models.includes('gemini-3.1-flash-lite'));
+
+  const prevGemini = process.env.GEMINI_API_KEY;
+  const prevGigaAuth = process.env.GIGACHAT_AUTH_KEY;
+  const prevGigaScope = process.env.GIGACHAT_SCOPE;
+
+  try {
+    delete process.env.GEMINI_API_KEY;
+    process.env.GIGACHAT_AUTH_KEY = 'Basic dGVzdC1jbGllbnQ6dGVzdC1zZWNyZXQ=';
+    delete process.env.GIGACHAT_SCOPE;
+
+    const creds = resolveGigaChatCredentials();
+    assert.equal(creds.authKey, 'dGVzdC1jbGllbnQ6dGVzdC1zZWNyZXQ=');
+    assert.equal(creds.scope, 'GIGACHAT_API_PERS');
+    assert.deepEqual(creds.models, ['GigaChat-2-Pro', 'GigaChat-2', 'GigaChat']);
+
+    const calls: Array<{
+      url: string;
+      headers: Record<string, string>;
+      body: string;
+    }> = [];
+
+    setGigaChatTransportForTest(async ({ url, headers, body }) => {
+      calls.push({ url, headers, body });
+
+      if (url === 'https://ngw.devices.sberbank.ru:9443/api/v2/oauth') {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: 'giga-access-token-abc',
+            expires_at: Date.now() + 25 * 60_000,
+          }),
+        };
+      }
+
+      const parsed = JSON.parse(body) as { model: string };
+      if (parsed.model === 'GigaChat-2-Pro') {
+        return {
+          status: 503,
+          bodyText: JSON.stringify({ message: 'Model overloaded' }),
+        };
+      }
+
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          choices: [{ message: { content: '{"ok":true,"provider":"gigachat-2"}' } }],
+        }),
+      };
+    });
+
+    const result = await callChatCompletionJson<{ ok: boolean; provider: string }>({
+      systemInstruction: 'Тест JSON',
+      userPrompt: 'Верни JSON',
+    });
+
+    assert.deepEqual(result, { ok: true, provider: 'gigachat-2' });
+    assert.equal(calls.length, 3);
+
+    // Call 1: OAuth token exchange
+    assert.equal(calls[0].url, 'https://ngw.devices.sberbank.ru:9443/api/v2/oauth');
+    assert.equal(calls[0].headers.Authorization, 'Basic dGVzdC1jbGllbnQ6dGVzdC1zZWNyZXQ=');
+    assert.ok(calls[0].headers.RqUID && calls[0].headers.RqUID.length > 10);
+    assert.equal(calls[0].body, 'scope=GIGACHAT_API_PERS');
+
+    // Call 2: GigaChat-2-Pro returns 503
+    assert.equal(calls[1].url, 'https://gigachat.devices.sberbank.ru/api/v1/chat/completions');
+    assert.equal(calls[1].headers.Authorization, 'Bearer giga-access-token-abc');
+    assert.equal((JSON.parse(calls[1].body) as { model: string }).model, 'GigaChat-2-Pro');
+
+    // Call 3: Automatic failover to GigaChat-2 reusing the cached Bearer token without a second OAuth call
+    assert.equal(calls[2].url, 'https://gigachat.devices.sberbank.ru/api/v1/chat/completions');
+    assert.equal(calls[2].headers.Authorization, 'Bearer giga-access-token-abc');
+    assert.equal((JSON.parse(calls[2].body) as { model: string }).model, 'GigaChat-2');
+  } finally {
+    setGigaChatTransportForTest(null);
+    if (prevGemini === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = prevGemini;
+    if (prevGigaAuth === undefined) delete process.env.GIGACHAT_AUTH_KEY;
+    else process.env.GIGACHAT_AUTH_KEY = prevGigaAuth;
+    if (prevGigaScope === undefined) delete process.env.GIGACHAT_SCOPE;
+    else process.env.GIGACHAT_SCOPE = prevGigaScope;
   }
 });

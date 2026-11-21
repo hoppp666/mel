@@ -1145,9 +1145,11 @@ export const SettingsSection: React.FC<{
           <div className="divide-y divide-stone-200 rounded border border-stone-200 text-xs">
             <div className="flex items-center justify-between gap-3 px-4 py-2.5">
               <div>
-                <div className="font-medium text-zinc-900">GitHub Models (openai/gpt-4o)</div>
+                <div className="font-medium text-zinc-900">
+                  Google Gemini + резерв GigaChat API (GEMINI_API_KEY / GIGACHAT_AUTH_KEY)
+                </div>
                 <div className="text-zinc-500">
-                  Нужен только для AI-генерации партий, переписывания и AI-помощников.
+                  Основной Gemini (gemini-4-hydrogen → gemini-3.1-flash-lite) с автопереключением на GigaChat API при сбое сервера.
                 </div>
               </div>
               <span
@@ -1155,7 +1157,14 @@ export const SettingsSection: React.FC<{
                   integrations.hasGeminiConfigured ? 'text-teal-800' : 'text-zinc-600'
                 }`}
               >
-                {integrations.hasGeminiConfigured ? 'Подключён' : 'Не задан (опционально)'}
+                {integrations.hasGeminiConfigured
+                  ? [
+                      integrations.hasGeminiPrimaryConfigured ? 'Gemini' : '',
+                      integrations.hasGigaChatConfigured ? 'GigaChat API' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' + ') || 'Подключён'
+                  : 'Не задан (опционально)'}
               </span>
             </div>
 

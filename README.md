@@ -2,11 +2,11 @@
 
 Платформа полного цикла для накопления, смысловой дедупликации, зарубежного исследования, авторской генерации и подготовки публикаций о любви и отношениях в фирменном стиле MELO_LOVE для **Telegram** и **Яндекс Дзена (`@zen_sync_bot`)**.
 
-- **Стек:** React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Motion, Vite 8, Node.js, Express (`server.ts`), GitHub Models (`openai/gpt-4o`).
+- **Стек:** React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Motion, Vite 8, Node.js, Express (`server.ts`), Google Gemini (`gemini-4-hydrogen` + резерв `gemini-3.1-flash-lite`) с автоматическим переключением на **GigaChat API** (`GigaChat-2-Pro` → `GigaChat-2` → `GigaChat`).
 - **Хранение:** локальные JSON-файлы в `data/*.json` с атомарной записью и ротацией до 15 бэкапов на модуль + готовая 6-табличная SQL-схема для **Supabase** (`supabase/schema.sql`).
 - **Подробная техническая сводка проекта:** [`MELO_LOVE_SUMMARY.txt`](./MELO_LOVE_SUMMARY.txt).
 
-> **Важно:** все внешние ключи (`GITHUB_MODELS_TOKEN`, `GITHUB_TOKEN`, `TELEGRAM_BOT_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) **необязательны** для запуска и работы интерфейса. Для `AI_MODEL` (`openai/gpt-4o`) и `GITHUB_MODELS_ENDPOINT` (`https://models.github.ai/inference/chat/completions`) заданы безопасные значения по умолчанию. Без ключей работают база сюжетов, ручной редактор, дедупликация, проверка лимитов, режим `Dry-Run` и экспорт файлов.
+> **Важно:** все внешние ключи (`GEMINI_API_KEY`, `GIGACHAT_AUTH_KEY`, `TELEGRAM_BOT_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) **необязательны** для запуска и работы интерфейса. Без ключей работают база сюжетов, ручной редактор, дедупликация, проверка лимитов, режим `Dry-Run` и экспорт файлов. При сбое/перегрузке Gemini (503/429) запрос автоматически переключается на свободные модели и затем на GigaChat (если задан `GIGACHAT_AUTH_KEY`).
 
 ---
 
@@ -55,8 +55,8 @@ npx tsx --test tests/research.test.ts tests/content.test.ts tests/publishing.tes
    GitHub Pages раздаёт только статический HTML/CSS/JS. В MELO_LOVE есть серверная часть на Express (`server.ts`), API-эндпоинты `/api/*`, запись в `data/*.json` и защита серверных ключей — на GitHub Pages это работать не будет.
 2. **GitHub Actions — подходит для автономного сбора, генерации, автотестов и расписания публикаций.**  
    В проекте настроены два независимых workflow с общей защитой от гонок (`concurrency: melo-love-autonomous-data`):
-   - `.github/workflows/melo-love-research.yml` — **Autonomous Research Scheduler** (каждые 6 часов, настраивается в `cron`, также доступен ручной запуск `workflow_dispatch`): собирает новые материалы из зарубежных источников, выполняет 6-уровневую дедупликацию до вызова AI, сохраняет постоянный реестр `data/processed_materials_registry.json`, состояние партий `data/autonomous_scheduler_state.json`, создаёт новые сюжеты/публикации и коммитит обновления `data/*.json` с `[skip ci]`.
-   - `.github/workflows/publishing-queue.yml` — **Publishing Scheduler** (каждые 3 часа, не более 4 публикаций в сутки, не более 1 поста за запуск): выполняет отправку готовых публикаций (`status: ready`) в Telegram **только** при включённой переменной `TELEGRAM_AUTO_SEND_ENABLED = true` и настроенных Secrets.  
+   - `.github/workflows/melo-love-research.yml` — **Autonomous Research Scheduler** (каждые 4 часа, настраивается в `cron`, также доступен ручной запуск `workflow_dispatch`): собирает новые материалы из зарубежных источников, выполняет 6-уровневую дедупликацию до вызова AI, сохраняет постоянный реестр `data/processed_materials_registry.json`, состояние партий `data/autonomous_scheduler_state.json`, создаёт новые сюжеты/публикации и коммитит обновления `data/*.json` с `[skip ci]`.
+   - `.github/workflows/publishing-queue.yml` — **Publishing Scheduler** (каждые 2 часа, до 12 публикаций в сутки, не более 1 поста за запуск): выполняет отправку готовых публикаций (`status: ready`) в Telegram **только** при включённой переменной `TELEGRAM_AUTO_SEND_ENABLED = true` и настроенных Secrets.  
    У GitHub Actions нет веб-интерфейса для пользователя (для UI используйте Render / Railway / Codespaces).
 3. **GitHub Codespaces — подходит для временного запуска в облаке.**  
    Вы можете открыть свой репозиторий в **GitHub Codespaces** (кнопка `Code -> Codespaces -> Create codespace on main`), выполнить `npm install && npm run dev` и открыть интерфейс на порту `3000` по временной ссылке браузера. Но Codespaces — это облачный редактор для разработки (лимитированные бесплатные часы), а не постоянный продакшен-хостинг.
@@ -113,7 +113,9 @@ git push -u origin main
 
 | Имя секрета | Назначение | Обязателен? |
 |---|---|---|
-| `GITHUB_MODELS_TOKEN` | PAT для GitHub Models (`openai/gpt-4o`), если нужен отдельный лимит | Нет (в Actions используется `GITHUB_TOKEN`) |
+| `GEMINI_API_KEY` | Ключ Google Gemini API (`gemini-4-hydrogen` + резерв `gemini-3.1-flash-lite`) | Нет (нужен для автоанализа и генерации) |
+| `GIGACHAT_AUTH_KEY` | Authorization key из `developers.sber.ru` (резервный или основной AI, без карты) | Нет (резерв при сбоях Gemini) |
+| `GIGACHAT_SCOPE` | Версия доступа GigaChat (`GIGACHAT_API_PERS` по умолчанию для физлиц) | Нет |
 | `TELEGRAM_BOT_TOKEN` | Токен бота от `@BotFather` | Нет (только для live-отправки) |
 | `TELEGRAM_CHANNEL_ID` | Публичный `@username` канала или числовой ID (`-100...`) | Нет (только для live-отправки) |
 | `SUPABASE_URL` | URL проекта Supabase (`https://xxx.supabase.co`) | Нет (только для облачной БД) |
@@ -169,7 +171,7 @@ MELO_LOVE — это единое Node.js + Express-приложение (`serve
 5. В разделе **Environment Variables** (по желанию сейчас или позже) добавьте переменные:
    - `NODE_VERSION` = `22`
    - `TELEGRAM_AUTO_SEND_ENABLED` = `false`
-   - По мере готовности: `GITHUB_MODELS_TOKEN` (или `GITHUB_TOKEN`), `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+   - По мере готовности: `GEMINI_API_KEY`, `GIGACHAT_AUTH_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 6. **Важно про сохранность данных (`data/*.json`):**
    - На бесплатном тарифе Render (Free Instance) диск сбрасывается при каждом перезапуске контейнера или новом деплое — все новые записи, сделанные через интерфейс на сервере, пропадут при рестарте.
    - **Решение 1 (простое на Render):** подключите **Persistent Disk** в настройках Web Service (точка монтирования `/opt/render/project/src/data`, если код лежит в `/opt/render/project/src`, предварительно перенеся стартовые `data/*.json` или экспортировав/импортировав базу после первого старта).

@@ -248,11 +248,10 @@ export const ForeignResearchSection: React.FC<ForeignResearchSectionProps> = ({
 
       {!geminiConfigured && (
         <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-zinc-700">
-          <span className="font-medium text-zinc-900">GitHub Models (GPT-4o) пока не подключён (опционально):</span>{' '}
-          автоматический AI-анализ источников потребует <code>GITHUB_MODELS_TOKEN</code> или{' '}
-          <code>GITHUB_TOKEN</code>, но каталог
-          площадок, проверка доступности RSS/robots.txt, просмотр карточек и экспорт JSON/CSV
-          полностью работают без ключа.
+          <span className="font-medium text-zinc-900">AI-анализ (Gemini / GigaChat API) пока не подключён (опционально):</span>{' '}
+          автоматический разбор источников потребует <code>GEMINI_API_KEY</code> или резервный{' '}
+          <code>GIGACHAT_AUTH_KEY</code>, но каталог площадок, проверка
+          RSS/robots.txt, просмотр карточек и экспорт JSON/CSV полностью работают без ключа.
         </div>
       )}
 

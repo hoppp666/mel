@@ -155,11 +155,12 @@ export const BatchModal: React.FC<BatchModalProps> = ({
           {!pendingBatch && !aiConfigured && (
             <div className="rounded-md border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-zinc-700">
               <span className="font-medium text-zinc-900">
-                GitHub Models (GPT-4o) пока не подключён:
+                AI-провайдер (Gemini / GigaChat API) пока не подключён:
               </span>{' '}
-              для AI-генерации партии требуется серверный токен <code>GITHUB_MODELS_TOKEN</code> или{' '}
-              <code>GITHUB_TOKEN</code>. Ручное добавление сюжетов, импорт JSON, проверка уникальности и
-              все остальные разделы работают без ключа.
+              для AI-генерации партии требуется серверный ключ <code>GEMINI_API_KEY</code> или
+              резервный <code>GIGACHAT_AUTH_KEY</code>. Ручное
+              добавление сюжетов, импорт JSON, проверка уникальности и все остальные разделы
+              работают без ключа.
             </div>
           )}
 
@@ -430,7 +431,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
           ) : (
             <>
               <div className="text-xs text-zinc-500">
-                Серверная генерация через GitHub Models (GPT-4o) с защитой от повторов
+                Серверная генерация через Gemini API (с резервом GigaChat API) и защитой от повторов
               </div>
               <div className="flex items-center gap-2.5">
                 <button

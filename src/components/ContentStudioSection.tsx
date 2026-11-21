@@ -582,8 +582,9 @@ export const ContentStudioSection: React.FC<ContentStudioSectionProps> = ({
 
                     {integrationStatus && !integrationStatus.hasGeminiConfigured && (
                       <div className="rounded border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-zinc-600">
-                        AI-помощники (заголовки, хештеги, SEO, сокращение) требуют{' '}
-                        <code>GITHUB_MODELS_TOKEN</code> или <code>GITHUB_TOKEN</code>. Ручная
+                        AI-помощники (заголовки, хештеги, SEO, сокращение) используют{' '}
+                        <code>GEMINI_API_KEY</code> или резервный GigaChat API (
+                        <code>GIGACHAT_AUTH_KEY</code>). Ручная
                         редактура, счётчик 3800 симв., предпросмотр и экспорт работают без ключа.
                       </div>
                     )}
@@ -1268,9 +1269,16 @@ export const ContentStudioSection: React.FC<ContentStudioSectionProps> = ({
                 </button>
               </div>
               <div>
-                GitHub Models GPT-4o (AI-помощники):{' '}
+                AI-генерация (Gemini + резерв GigaChat API):{' '}
                 <span className={integrationStatus.hasGeminiConfigured ? 'text-teal-800' : 'text-zinc-600'}>
-                  {integrationStatus.hasGeminiConfigured ? 'настроен' : 'не задан (редактор работает без него)'}
+                  {integrationStatus.hasGeminiConfigured
+                    ? [
+                        integrationStatus.hasGeminiPrimaryConfigured ? 'Gemini' : '',
+                        integrationStatus.hasGigaChatConfigured ? 'GigaChat API' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' + ') || 'настроен'
+                    : 'не задан (редактор работает без него)'}
                 </span>
               </div>
               <div>

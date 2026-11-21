@@ -28,8 +28,7 @@ export async function searchForeignLeadsWithGrounding(_params: {
   limit: number;
   signal?: AbortSignal;
 }): Promise<GroundingLead[]> {
-  // GitHub Models (GPT-4o) does not use Gemini Google Search Grounding;
-  // direct RSS/public feeds in researchSources.ts provide verified leads cleanly.
+  // Direct verified RSS/public feeds in researchSources.ts provide primary leads reliably without wasting AI quota.
   return [];
 }
 
