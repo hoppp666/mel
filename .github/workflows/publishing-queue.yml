@@ -1,0 +1,68 @@
+name: MELO_LOVE Publishing Scheduler (Every 2h)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Независимое расписание публикаций (раз в 2 часа, до 12 постов в сутки).
+    - cron: '0 */2 * * *'
+
+# Единая блокировка с melo-love-research.yml для защиты JSON-базы от гонок
+concurrency:
+  group: melo-love-autonomous-data
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --legacy-peer-deps
+          else
+            npm install --no-package-lock --no-audit --no-fund --legacy-peer-deps
+          fi
+
+      - name: Run TypeScript check and unit tests
+        run: |
+          npm run lint
+          npx tsx --test tests/research.test.ts tests/content.test.ts tests/publishing.test.ts tests/autonomous.test.ts
+
+      - name: Process due Telegram publishing slot
+        env:
+          TELEGRAM_AUTO_SEND_ENABLED: ${{ vars.TELEGRAM_AUTO_SEND_ENABLED || secrets.TELEGRAM_AUTO_SEND_ENABLED || 'true' }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '' }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID || '' }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: npx tsx scripts/run-publishing-queue.ts
+
+      - name: Commit and push publishing state ([skip ci])
+        if: ${{ !cancelled() }}
+        run: |
+          git config user.name "melo-love-bot"
+          git config user.email "melo-love-bot@users.noreply.github.com"
+          git add data/*.json
+          if git diff --cached --quiet; then
+            echo "No publishing state changes."
+            exit 0
+          fi
+          git commit -m "chore(melo-love): scheduled Telegram publish update [skip ci]"
+          for attempt in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            echo "Push conflict on attempt $attempt, retrying..."
+            sleep 3
+          done
+          exit 1
