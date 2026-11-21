@@ -1,0 +1,137 @@
+================================================================================
+MELO_LOVE CONTENT FACTORY — ПОЛНАЯ СВОДКА ПРОЕКТА (ЭТАПЫ 1 + 2 + 3 + 4)
+Архитектура, реализованные модули, правила Telegram + Дзен, безопасность и запуск
+================================================================================
+
+1. ОБЩАЯ КОНЦЕПЦИЯ И ЦЕЛЬ ПРОЕКТА
+--------------------------------------------------------------------------------
+MELO_LOVE — full-stack content-engineering платформа полного цикла для
+создания жизненных публикаций о любви и отношениях для Telegram и Яндекс Дзена:
+
+  [Этап 1: Сбор и дедупликация сюжетных основ (`ML-D-xxxx` / `ML-R-xxxx`)]
+        + [Этап 2: Зарубежное исследование (`RES-D-xxxx` / `RES-R-xxxx`)]
+        -> [Этап 3: Генератор текстов MELO_LOVE (`ML-P-D-xxxxxx` / `ML-P-R-xxxxxx`)]
+        -> [Этап 4: Content Studio + Telegram Bot API -> @zen_sync_bot (`PUB-D-xxxxxx` / `PUB-R-xxxxxx`)]
+
+Две независимые коллекции:
+- Коллекция A («Кто здесь прав?» / debate): неоднозначные жизненные ситуации
+  и конфликты, разделяющие читателей на два лагеря.
+- Коллекция B («Романтические истории» / romantic): конкретные жизненные сцены,
+  поступки и тёплые бытовые детали.
+Целевой масштаб базы сюжетов: 3000 уникальных записей (1500 + 1500).
+
+
+2. ТЕХНОЛОГИЧЕСКИЙ СТЕК
+--------------------------------------------------------------------------------
+- Frontend: React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Motion, Vite 8.
+- Backend: Node.js + Express на едином порту 3000
+  (dev: `tsx server.ts` с `vite.middlewares`;
+   prod: `NODE_ENV=production node server.ts` со статикой `dist/`).
+- AI-интеграция: серверный SDK `@google/genai`, модель `gemini-4-hydrogen`
+  (Google Search Grounding на Этапах 1–2; `ThinkingLevel.LOW` на Этапах 3–4).
+- Хранилище: локальные JSON-файлы в `data/` с атомарной записью (`.tmp`) и
+  ротацией до 15 бэкапов на модуль + 6-табличная схема PostgreSQL для Supabase
+  (`supabase/schema.sql`).
+- Автоматизация: `.github/workflows/publishing-queue.yml` и скрипт
+  `scripts/run-publishing-queue.ts` (защищены от случайной отправки флагом
+  `TELEGRAM_AUTO_SEND_ENABLED == 'true'`).
+
+
+3. ФАЙЛОВАЯ СТРУКТУРА ПРОЕКТА (ЭТАПЫ 1–4)
+--------------------------------------------------------------------------------
+Корневые файлы:
+- server.ts                   — Express-сервер, восстановление прерванных задач
+                                всех этапов при старте, все REST API.
+- .env.example                — шаблон серверных переменных без секретов.
+- .gitignore                  — исключения (node_modules, dist, .env, backups).
+- MELO_LOVE_SUMMARY.txt       — полная техническая сводка проекта.
+- README.md                   — быстрый старт и команды проверки.
+
+Серверная часть (`server/`):
+- Этап 1: `storage.ts`, `seedDebate.ts`, `seedRomantic.ts`, `geminiBatch.ts`,
+  `zipBuilder.ts`.
+- Этап 2: `researchStorage.ts`, `researchSources.ts`, `researchAnalyzer.ts`,
+  `researchEngine.ts`.
+- Этап 3: `contentStorage.ts`, `voiceEngine.ts`, `contentGenerator.ts`,
+  `contentRoutes.ts`.
+- Этап 4:
+  * `publishingStorage.ts`    — хранение `data/publications.json`,
+                                `data/publishing_settings.json`,
+                                `data/publishing_logs.json`, 15 бэкапов в
+                                `data/publishing_backups/`, санитизация статусов
+                                секретов, подсчёт аналитики, перевод
+                                `StoryPlot.usageStatus` в `'published'` ТОЛЬКО
+                                при подтверждении `zen_delivery_verified`.
+  * `telegramPublisher.ts`    — валидация (идемпотентность, 3800 симв., 1024
+                                для caption с фото), Dry-Run и live-отправка в
+                                Telegram Bot API, маскировка токена во всех
+                                ошибках/логах, проверка подключения `getMe`/`getChat`.
+  * `studioAiAssistant.ts`    — серверные AI-инструменты Content Studio:
+                                5 вариантов заголовков (<=140 симв.), SEO-адаптация
+                                под Дзен, сокращение в лимит <=3800 симв., подбор
+                                3–5 хештегов.
+  * `supabaseMigration.ts`    — проверка ссылочной целостности между всеми 4
+                                модулями, обязательные бэкапы перед миграцией,
+                                генерация `supabase/schema.sql`, опциональный
+                                upsert в Supabase без удаления локальных JSON.
+  * `publishingRoutes.ts`     — REST API группы `/api/publishing/*`.
+
+База данных и CI/CD:
+- `supabase/schema.sql`       — DDL 6 таблиц (`melo_story_plots`,
+                                `melo_research_results`, `melo_content_drafts`,
+                                `melo_publications`, `melo_publishing_logs`,
+                                `melo_phrasebook`) с внешними ключами и индексами.
+- `scripts/run-publishing-queue.ts`
+- `.github/workflows/publishing-queue.yml`
+
+Общие модули и клиент (`src/`):
+- `src/shared/types.ts`       — типы Этапов 1–4.
+- `src/shared/categories.ts`, `src/shared/similarity.ts`, `src/shared/contentUtils.ts`.
+- `src/shared/publishingUtils.ts` — подсчёт символов (лимит 3800 / caption 1024 /
+                                заголовок Дзена 140), нормализация и проверка 3–5
+                                хештегов, редакционная диагностика, форматтеры
+                                Telegram/TXT/JSON.
+- `src/services/api.ts`       — типизированный клиент REST API (Этапы 1–4).
+- `src/App.tsx`               — 12 разделов навигации (включая `Content Studio`).
+- `src/components/StoryListView.tsx`, `StoryModal.tsx`, `BatchModal.tsx`,
+  `Sections.tsx`, `ForeignResearchSection.tsx`, `ResearchDetailModal.tsx`,
+  `StoryGeneratorSection.tsx`, `ContentStudioSection.tsx`.
+
+Автотесты (`tests/`):
+- `tests/research.test.ts`    — модульные тесты Этапа 2.
+- `tests/content.test.ts`     — модульные тесты Этапа 3.
+- `tests/publishing.test.ts`  — модульные тесты Этапа 4.
+
+
+4. КРИТИЧЕСКИЕ ИНВАРИАНТЫ ЭТАПА 4 (TELEGRAM + @zen_sync_bot)
+--------------------------------------------------------------------------------
+1) Жёсткий безопасный лимит длины Telegram-поста: 3800 символов с пробелами
+   (при техническом потолке Bot API 4096 символов) с учётом заголовка, основного
+   текста, финального вопроса и 3–5 хештегов.
+   - Посты > 3800 символов НИКОГДА не разбиваются автоматически на 2 сообщения и
+     блокируются от автоотправки в Telegram (доступен экспорт TXT/JSON для ручной
+     публикации в Дзен-студии).
+   - Для постов с отметкой «с изображением (caption)» действует отдельный
+     жёсткий лимит 1024 символа.
+2) Правила официального бота Дзена `@zen_sync_bot`:
+   - Первое предложение сообщения (до 140 символов, оканчивающееся на `.`/`!`/`?`)
+     автоматически становится заголовком статьи в Дзене.
+   - Разметка Markdown/HTML из Telegram в Дзен не переносится — диагностика
+     предупреждает о raw-разметке и двойных пробелах.
+   - Бот не синхронизирует пересланные посты из других каналов — публикация
+     должна идти напрямую от имени привязанного публичного канала.
+3) Статусы и защита от дублей:
+   - `draft` -> `ready` -> `scheduled` -> `sending` -> `zen_delivery_unconfirmed`
+     -> `zen_delivery_verified` (или `failed`).
+   - Успешный ответ Telegram API (`message_id`) ставит `zen_delivery_unconfirmed`,
+     но НЕ `zen_delivery_verified`: Дзен подтверждается отдельно вручную или
+     источником подтверждения, и только тогда исходный `StoryPlot.usageStatus`
+     переводится в `'published'`.
+   - Повторная отправка с тем же `telegramMessageId` или в статусах
+     `sending`/`sent_to_telegram`/`zen_delivery_unconfirmed`/`zen_delivery_verified`
+     заблокирована на уровне backend.
+4) Безопасность секретов:
+   - `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `SUPABASE_URL`,
+     `SUPABASE_SERVICE_ROLE_KEY` используются только на сервере, маскируются при
+     логировании и никогда не передаются в клиентский бандл.
+================================================================================

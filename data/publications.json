@@ -1,0 +1,41 @@
+[
+  {
+    "publicationId": "PUB-D-999101",
+    "sourceStoryId": "ML-D-0001",
+    "collection": "debate",
+    "category": "Совместный бюджет",
+    "subcategory": "Расходы после потери работы",
+    "title": "Общий бюджет оказался проверкой доверия",
+    "alternativeTitles": [],
+    "teaser": "Спор о первом совместном отпуске и скрытом счёте.",
+    "body": "Анна заметила, что партнёр перевёл премию на отдельный счёт без предупреждения.\n\nНа прямой вопрос он ответил, что каждый имеет право на финансовую подушку.",
+    "closingQuestion": "А вы бы восприняли это как осторожность или недоверие?",
+    "hashtags": [
+      "#отношения",
+      "#семейный_бюджет",
+      "#кто_здесь_прав"
+    ],
+    "hasImageAttachment": false,
+    "totalChars": 298,
+    "remainingChars": 3502,
+    "exceedsTelegramLimit": false,
+    "firstSentenceLength": 40,
+    "seoNotes": "",
+    "seoKeywords": [],
+    "editorialChecks": {
+      "spellingOk": true,
+      "noRepetitionOk": true,
+      "logicOk": true,
+      "meloStyleOk": true,
+      "headlineOk": true,
+      "hashtagsOk": true,
+      "notes": []
+    },
+    "status": "failed",
+    "idempotencyKey": "TEST-IDEMP-1795242990714",
+    "revisionHistory": [],
+    "createdAt": "2026-11-21T06:36:30.714Z",
+    "updatedAt": "2026-11-21T06:36:32.098Z",
+    "error": "Отправка прервана перезапуском сервера; проверьте канал перед повтором."
+  }
+]

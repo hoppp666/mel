@@ -1,0 +1,10 @@
+{
+  "autoSendEnabled": true,
+  "dryRunMode": false,
+  "telegramChannelRef": "",
+  "dzenChannelName": "MELO_LOVE",
+  "dzenSyncMode": "automatic",
+  "utmSource": "telegram",
+  "safeTelegramCharLimit": 3800,
+  "updatedAt": "2026-11-21T01:32:08.660Z"
+}
