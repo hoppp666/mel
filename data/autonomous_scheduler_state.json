@@ -14,6 +14,30 @@
   },
   "batches": [
     {
+      "batchId": "RBATCH-0007",
+      "collection": "debate",
+      "status": "completed",
+      "targetCount": 4,
+      "processedUrls": [
+        "psychologytoday.com/us/blog/fixing-families/202611/how-to-deal-with-people-who-always-excuse-their-bad-behavior",
+        "psychologytoday.com/us/blog/the-wu-wei-of-life/202611/transformation-doesnt-have-to-be-hard",
+        "psychologytoday.com/us/blog/moral-intuitions/202611/does-terrorism-really-bring-people-together",
+        "psychologytoday.com/us/blog/decoding-shame/202611/the-science-of-gratitude",
+        "psychologytoday.com/us/blog/authenticity-101/202611/the-real-reason-why-men-need-therapy",
+        "psychologytoday.com/us/blog/mental-health-nerd/202611/what-does-silence-mean-in-your-relationships",
+        "psychologytoday.com/us/blog/aligning-for-growth/202611/activation-energy-and-the-difficulty-of-getting-started",
+        "psychologytoday.com/us/blog/feed-your-brain/202611/why-your-brain-feels-tired-when-your-body-isnt"
+      ],
+      "discoveredCount": 8,
+      "newUniqueCount": 4,
+      "duplicateCount": 4,
+      "analyzedCount": 4,
+      "pendingAnalysisCount": 0,
+      "failedCount": 0,
+      "startedAt": "2026-11-22T04:59:44.049Z",
+      "finishedAt": "2026-11-22T05:00:19.230Z"
+    },
+    {
       "batchId": "RBATCH-0006",
       "collection": "romantic",
       "status": "completed",
@@ -157,14 +181,65 @@
       "lastError": "Превышена квота Gemini API (429 RESOURCE_EXHAUSTED). Дождитесь суточного сброса лимита или подключите ключ с расширенным тарифом в Settings > Secrets."
     }
   ],
-  "nextScheduledResearchAt": "2026-11-22T04:00:11.973Z",
+  "nextScheduledResearchAt": "2026-11-22T09:00:19.233Z",
   "publishedTodayDate": "2026-11-22",
-  "publishedTodayCount": 1,
-  "totalDiscoveredMaterials": 44,
+  "publishedTodayCount": 2,
+  "totalDiscoveredMaterials": 52,
   "totalUniqueStoriesSaved": 0,
-  "totalPublicationsCreated": 9,
-  "totalPublishedToTelegram": 3,
+  "totalPublicationsCreated": 12,
+  "totalPublishedToTelegram": 4,
   "runHistory": [
+    {
+      "runId": "RUN-MWRDCD5M",
+      "kind": "publish",
+      "mode": "github_actions",
+      "startedAt": "2026-11-22T05:00:43.028Z",
+      "finishedAt": "2026-11-22T05:00:43.545Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 1,
+      "summary": "Опубликовано в Telegram: PUB-D-999303 (message_id=7). Ожидает подтверждения Дзена."
+    },
+    {
+      "runId": "RUN-MWRDCCR5",
+      "kind": "production",
+      "mode": "github_actions",
+      "startedAt": "2026-11-22T05:00:19.234Z",
+      "finishedAt": "2026-11-22T05:00:43.025Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 3,
+      "publishedToTelegram": 0,
+      "summary": "Обработано сюжетов: 3, создано публикаций: 3."
+    },
+    {
+      "runId": "RUN-MWRDBUE9",
+      "kind": "research",
+      "mode": "github_actions",
+      "startedAt": "2026-11-22T04:59:44.049Z",
+      "finishedAt": "2026-11-22T05:00:19.230Z",
+      "ok": true,
+      "discovered": 8,
+      "uniqueAdded": 4,
+      "duplicates": 4,
+      "analyzed": 4,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 0,
+      "summary": "Партия RBATCH-0007 (debate): найдено 8, новых 4, дубликатов 4, проанализировано 4, в базу сюжетов 0."
+    },
     {
       "runId": "RUN-MWR32SSR",
       "kind": "publish",
@@ -546,10 +621,10 @@
       "error": "Превышена квота Gemini API (429 RESOURCE_EXHAUSTED). Дождитесь суточного сброса лимита или подключите ключ с расширенным тарифом в Settings > Secrets."
     }
   ],
-  "lastCollectionUsed": "romantic",
-  "lastResearchRunAt": "2026-11-22T00:00:11.970Z",
-  "lastProductionRunAt": "2026-11-22T00:00:52.121Z",
-  "lastPublishRunAt": "2026-11-22T00:13:21.099Z",
-  "nextScheduledPublishAt": "2026-11-22T02:00:52.597Z",
-  "lastSuccessfulTelegramAt": "2026-11-22T00:00:52.597Z"
+  "lastCollectionUsed": "debate",
+  "lastResearchRunAt": "2026-11-22T05:00:19.230Z",
+  "lastProductionRunAt": "2026-11-22T05:00:43.025Z",
+  "lastPublishRunAt": "2026-11-22T05:00:43.545Z",
+  "nextScheduledPublishAt": "2026-11-22T07:00:43.545Z",
+  "lastSuccessfulTelegramAt": "2026-11-22T05:00:43.545Z"
 }
