@@ -1,5 +1,37 @@
 [
   {
+    "id": "PLOG-MWS0WQRW-5TS0",
+    "publicationId": "PUB-D-999305",
+    "action": "telegram_sent",
+    "status": "zen_delivery_unconfirmed",
+    "detail": "Отправлено в Telegram (message_id=9). Ожидает фактического подтверждения выхода в Дзене.",
+    "createdAt": "2026-11-22T16:00:25.484Z"
+  },
+  {
+    "id": "PLOG-MWS0WQDR-LFOM",
+    "publicationId": "PUB-D-999309",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-D-0011 (2209/3800 симв., качество 92/100).",
+    "createdAt": "2026-11-22T16:00:24.975Z"
+  },
+  {
+    "id": "PLOG-MWS0V9XQ-KB5M",
+    "publicationId": "PUB-R-000004",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-R-0005 (1920/3800 симв., качество 97/100).",
+    "createdAt": "2026-11-22T15:59:17.006Z"
+  },
+  {
+    "id": "PLOG-MWS0QFYI-2TL0",
+    "publicationId": "PUB-D-999308",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-D-0010 (2043/3800 симв., качество 92/100).",
+    "createdAt": "2026-11-22T15:55:31.530Z"
+  },
+  {
     "id": "PLOG-MWRN6134-DW06",
     "publicationId": "PUB-D-999304",
     "action": "telegram_sent",

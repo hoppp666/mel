@@ -9,7 +9,7 @@
     "maxFrequencyPer10": 2,
     "banned": false,
     "recentUsageCount": 2,
-    "totalUsageCount": 2,
+    "totalUsageCount": 3,
     "createdAt": "2026-11-21T00:30:00.000Z"
   },
   {
@@ -22,7 +22,7 @@
     "maxFrequencyPer10": 2,
     "banned": false,
     "recentUsageCount": 2,
-    "totalUsageCount": 3,
+    "totalUsageCount": 4,
     "createdAt": "2026-11-21T00:30:00.000Z"
   },
   {
@@ -34,8 +34,8 @@
     "weight": 9,
     "maxFrequencyPer10": 2,
     "banned": false,
-    "recentUsageCount": 0,
-    "totalUsageCount": 2,
+    "recentUsageCount": 2,
+    "totalUsageCount": 4,
     "createdAt": "2026-11-21T00:30:00.000Z"
   },
   {
@@ -48,7 +48,7 @@
     "maxFrequencyPer10": 2,
     "banned": false,
     "recentUsageCount": 2,
-    "totalUsageCount": 2,
+    "totalUsageCount": 3,
     "createdAt": "2026-11-21T00:30:00.000Z"
   },
   {
@@ -61,7 +61,7 @@
     "maxFrequencyPer10": 2,
     "banned": false,
     "recentUsageCount": 2,
-    "totalUsageCount": 3,
+    "totalUsageCount": 4,
     "createdAt": "2026-11-21T00:30:00.000Z"
   },
   {
@@ -73,7 +73,7 @@
     "weight": 8,
     "maxFrequencyPer10": 2,
     "banned": false,
-    "recentUsageCount": 2,
+    "recentUsageCount": 1,
     "totalUsageCount": 2,
     "createdAt": "2026-11-21T00:30:00.000Z"
   },
@@ -99,7 +99,7 @@
     "weight": 8,
     "maxFrequencyPer10": 2,
     "banned": false,
-    "recentUsageCount": 2,
+    "recentUsageCount": 1,
     "totalUsageCount": 2,
     "createdAt": "2026-11-15T10:00:00.000Z"
   },
@@ -125,7 +125,7 @@
     "weight": 8,
     "maxFrequencyPer10": 2,
     "banned": false,
-    "recentUsageCount": 2,
+    "recentUsageCount": 1,
     "totalUsageCount": 2,
     "createdAt": "2026-11-15T10:00:00.000Z"
   }
