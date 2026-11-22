@@ -183,12 +183,29 @@
   ],
   "nextScheduledResearchAt": "2026-11-22T09:00:19.233Z",
   "publishedTodayDate": "2026-11-22",
-  "publishedTodayCount": 2,
+  "publishedTodayCount": 3,
   "totalDiscoveredMaterials": 52,
   "totalUniqueStoriesSaved": 0,
   "totalPublicationsCreated": 12,
-  "totalPublishedToTelegram": 4,
+  "totalPublishedToTelegram": 5,
   "runHistory": [
+    {
+      "runId": "RUN-MWRN6135",
+      "kind": "publish",
+      "mode": "github_actions",
+      "startedAt": "2026-11-22T09:35:43.764Z",
+      "finishedAt": "2026-11-22T09:35:44.128Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 1,
+      "summary": "Опубликовано в Telegram: PUB-D-999304 (message_id=8). Ожидает подтверждения Дзена."
+    },
     {
       "runId": "RUN-MWRDCD5M",
       "kind": "publish",
@@ -624,7 +641,7 @@
   "lastCollectionUsed": "debate",
   "lastResearchRunAt": "2026-11-22T05:00:19.230Z",
   "lastProductionRunAt": "2026-11-22T05:00:43.025Z",
-  "lastPublishRunAt": "2026-11-22T05:00:43.545Z",
-  "nextScheduledPublishAt": "2026-11-22T07:00:43.545Z",
-  "lastSuccessfulTelegramAt": "2026-11-22T05:00:43.545Z"
+  "lastPublishRunAt": "2026-11-22T09:35:44.128Z",
+  "nextScheduledPublishAt": "2026-11-22T11:35:44.128Z",
+  "lastSuccessfulTelegramAt": "2026-11-22T09:35:44.128Z"
 }

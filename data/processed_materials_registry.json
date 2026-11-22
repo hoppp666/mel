@@ -231,11 +231,12 @@
     "collection": "debate",
     "discoveredAt": "2026-11-10T15:00:00.000Z",
     "contentFingerprint": "откуп|деньг|бытовых|обязанност|неожиданн|реакц|партнер|замен|личн|участ|быт|платн|услуг|общ|бюджет|свет|ждал|пересмотр|привычек|муж|павел|облегчен|благодарност|доход",
-    "status": "ready",
+    "status": "published_to_telegram",
     "storyId": "ML-D-0006",
-    "updatedAt": "2026-11-22T00:00:25.061Z",
+    "updatedAt": "2026-11-22T09:35:44.128Z",
     "contentId": "ML-P-D-000005",
-    "publicationId": "PUB-D-999304"
+    "publicationId": "PUB-D-999304",
+    "telegramMessageId": 8
   },
   {
     "id": "REG-000055",
