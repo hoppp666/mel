@@ -27,11 +27,12 @@
     "collection": "romantic",
     "discoveredAt": "2026-11-11T15:00:00.000Z",
     "contentFingerprint": "поддержк|провал|работ|молчаливу|прогулк|принят|уязвимост|друг|человек|отказ|поучен|утешен|польз|физическ|присутств|смен|обстановк|денис|боялс|жалост|упрек|потерянн|доход|вер",
-    "status": "ready",
+    "status": "published_to_telegram",
     "storyId": "ML-R-0006",
-    "updatedAt": "2026-11-22T21:23:05.887Z",
+    "updatedAt": "2026-11-22T23:28:34.337Z",
     "contentId": "ML-P-R-000006",
-    "publicationId": "PUB-R-000001"
+    "publicationId": "PUB-R-000001",
+    "telegramMessageId": 11
   },
   {
     "id": "REG-000087",
