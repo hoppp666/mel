@@ -1,5 +1,13 @@
 [
   {
+    "id": "PLOG-MWSX20QH-BRK7",
+    "publicationId": "PUB-D-999103",
+    "action": "telegram_sent",
+    "status": "zen_delivery_unconfirmed",
+    "detail": "Отправлено в Telegram (message_id=13). Ожидает фактического подтверждения выхода в Дзене.",
+    "createdAt": "2026-11-23T07:00:19.385Z"
+  },
+  {
     "id": "PLOG-MWSGX2CH-K80M",
     "publicationId": "PUB-R-000001",
     "action": "telegram_sent",

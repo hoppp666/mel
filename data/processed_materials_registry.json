@@ -10,11 +10,12 @@
     "collection": "debate",
     "discoveredAt": "2026-11-10T22:00:00.000Z",
     "contentFingerprint": "уход|встреч|хронических|опоздан|моральн|дилемм|прост|ответ|демонстративн|свидан|неоднократных|предупрежден|опоздани|тимур|ждал|четк|правил|изменит|привычк|карин|уверен|люб|случа|дожд",
-    "status": "ready",
+    "status": "published_to_telegram",
     "storyId": "ML-D-0013",
-    "updatedAt": "2026-11-22T21:23:12.343Z",
+    "updatedAt": "2026-11-23T07:00:19.385Z",
     "contentId": "ML-P-D-000012",
-    "publicationId": "PUB-D-999103"
+    "publicationId": "PUB-D-999103",
+    "telegramMessageId": 13
   },
   {
     "id": "REG-000088",
