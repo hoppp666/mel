@@ -14,6 +14,26 @@
   },
   "batches": [
     {
+      "batchId": "RBATCH-0010",
+      "collection": "romantic",
+      "status": "completed",
+      "targetCount": 4,
+      "processedUrls": [
+        "psychologytoday.com/us/blog/authenticity-101/202611/how-to-survive-the-holidays-with-ignorant-relatives",
+        "psychologytoday.com/us/blog/navigating-the-serpentine-path/202611/phenomenological-bioethics-what-does-it-mean-to-die-well",
+        "psychologytoday.com/us/blog/the-art-of-living-free/202611/is-cheating-in-marriage-ever-justified",
+        "psychologytoday.com/us/blog/mind-blown/202611/you-have-no-idea-what-im-thinking"
+      ],
+      "discoveredCount": 4,
+      "newUniqueCount": 4,
+      "duplicateCount": 0,
+      "analyzedCount": 4,
+      "pendingAnalysisCount": 0,
+      "failedCount": 0,
+      "startedAt": "2026-11-23T19:34:46.551Z",
+      "finishedAt": "2026-11-23T19:38:01.952Z"
+    },
+    {
       "batchId": "RBATCH-0009",
       "collection": "debate",
       "status": "completed",
@@ -227,14 +247,65 @@
       "lastError": "Превышена квота Gemini API (429 RESOURCE_EXHAUSTED). Дождитесь суточного сброса лимита или подключите ключ с расширенным тарифом в Settings > Secrets."
     }
   ],
-  "nextScheduledResearchAt": "2026-11-23T01:22:52.931Z",
+  "nextScheduledResearchAt": "2026-11-23T23:38:01.955Z",
   "publishedTodayDate": "2026-11-23",
-  "publishedTodayCount": 1,
-  "totalDiscoveredMaterials": 66,
+  "publishedTodayCount": 2,
+  "totalDiscoveredMaterials": 70,
   "totalUniqueStoriesSaved": 0,
-  "totalPublicationsCreated": 18,
-  "totalPublishedToTelegram": 9,
+  "totalPublicationsCreated": 21,
+  "totalPublishedToTelegram": 10,
   "runHistory": [
+    {
+      "runId": "RUN-MWTO94EP",
+      "kind": "publish",
+      "mode": "github_actions",
+      "startedAt": "2026-11-23T19:41:39.644Z",
+      "finishedAt": "2026-11-23T19:41:40.368Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 1,
+      "summary": "Опубликовано в Telegram: PUB-D-999104 (message_id=14). Ожидает подтверждения Дзена."
+    },
+    {
+      "runId": "RUN-MWTO93UH",
+      "kind": "production",
+      "mode": "github_actions",
+      "startedAt": "2026-11-23T19:38:01.956Z",
+      "finishedAt": "2026-11-23T19:41:39.641Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 3,
+      "publishedToTelegram": 0,
+      "summary": "Обработано сюжетов: 3, создано публикаций: 3."
+    },
+    {
+      "runId": "RUN-MWTO4FVN",
+      "kind": "research",
+      "mode": "github_actions",
+      "startedAt": "2026-11-23T19:34:46.551Z",
+      "finishedAt": "2026-11-23T19:38:01.952Z",
+      "ok": true,
+      "discovered": 4,
+      "uniqueAdded": 4,
+      "duplicates": 0,
+      "analyzed": 4,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 0,
+      "summary": "Партия RBATCH-0010 (romantic): найдено 4, новых 4, дубликатов 0, проанализировано 4, в базу сюжетов 0."
+    },
     {
       "runId": "RUN-MWSX20QI",
       "kind": "publish",
@@ -820,10 +891,10 @@
       "error": "Превышена квота Gemini API (429 RESOURCE_EXHAUSTED). Дождитесь суточного сброса лимита или подключите ключ с расширенным тарифом в Settings > Secrets."
     }
   ],
-  "lastCollectionUsed": "debate",
-  "lastResearchRunAt": "2026-11-22T21:22:52.929Z",
-  "lastProductionRunAt": "2026-11-22T21:23:12.343Z",
-  "lastPublishRunAt": "2026-11-23T07:00:19.385Z",
-  "nextScheduledPublishAt": "2026-11-23T09:00:19.385Z",
-  "lastSuccessfulTelegramAt": "2026-11-23T07:00:19.385Z"
+  "lastCollectionUsed": "romantic",
+  "lastResearchRunAt": "2026-11-23T19:38:01.952Z",
+  "lastProductionRunAt": "2026-11-23T19:41:39.641Z",
+  "lastPublishRunAt": "2026-11-23T19:41:40.368Z",
+  "nextScheduledPublishAt": "2026-11-23T21:41:40.368Z",
+  "lastSuccessfulTelegramAt": "2026-11-23T19:41:40.368Z"
 }
