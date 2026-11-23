@@ -256,6 +256,23 @@
   "totalPublishedToTelegram": 10,
   "runHistory": [
     {
+      "runId": "RUN-MWTOXGPA",
+      "kind": "publish",
+      "mode": "github_actions",
+      "startedAt": "2026-11-23T20:00:36.045Z",
+      "finishedAt": "2026-11-23T20:00:36.046Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 0,
+      "summary": "Интервал 2 ч. ещё не выдержан. Следующее окно: 2026-11-23T21:41:40.368Z."
+    },
+    {
       "runId": "RUN-MWTO94EP",
       "kind": "publish",
       "mode": "github_actions",
@@ -894,7 +911,7 @@
   "lastCollectionUsed": "romantic",
   "lastResearchRunAt": "2026-11-23T19:38:01.952Z",
   "lastProductionRunAt": "2026-11-23T19:41:39.641Z",
-  "lastPublishRunAt": "2026-11-23T19:41:40.368Z",
+  "lastPublishRunAt": "2026-11-23T20:00:36.046Z",
   "nextScheduledPublishAt": "2026-11-23T21:41:40.368Z",
   "lastSuccessfulTelegramAt": "2026-11-23T19:41:40.368Z"
 }

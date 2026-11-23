@@ -1,5 +1,13 @@
 [
   {
+    "id": "PLOG-MWTOXFLB-STBT",
+    "publicationId": "PUB-D-999301",
+    "action": "dry_run_check",
+    "status": "ready",
+    "detail": "Тестовая проверка (без реальной отправки): 298/3800 симв. Статус не изменён.",
+    "createdAt": "2026-11-23T20:00:34.607Z"
+  },
+  {
     "id": "PLOG-MWTO94EO-UB10",
     "publicationId": "PUB-D-999104",
     "action": "telegram_sent",
