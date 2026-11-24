@@ -1,5 +1,30 @@
 [
   {
+    "id": "JOB-AUTO-MWU3X54D",
+    "collection": "debate",
+    "sourceIds": [
+      "SRC-PSYTODAY-REL",
+      "SRC-HUFFPOST-REL",
+      "SRC-YOURTANGO"
+    ],
+    "categoryFocus": "balanced",
+    "sourceLanguage": "en",
+    "requestedCount": 4,
+    "analysisDepth": "standard",
+    "transformMode": "analyze_and_generate",
+    "status": "completed",
+    "methodUsed": "direct_public_feed",
+    "processedCount": 4,
+    "foundCount": 4,
+    "failedCount": 0,
+    "startedAt": "2026-11-24T03:00:12.946Z",
+    "logs": [
+      "[2026-11-24T03:00:12.946Z] Автозапуск github_actions (RBATCH-0011, debate)",
+      "[2026-11-24T03:02:05.113Z] Новых: 4, дубликатов: 0, проанализировано: 4, в базу: 0."
+    ],
+    "finishedAt": "2026-11-24T03:02:05.113Z"
+  },
+  {
     "id": "JOB-AUTO-MWTO09PJ",
     "collection": "romantic",
     "sourceIds": [
