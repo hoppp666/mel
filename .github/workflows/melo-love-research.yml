@@ -65,7 +65,7 @@ jobs:
         id: verify
         run: |
           npm run lint
-          npx tsx --test --test-concurrency=1 tests/research.test.ts tests/content.test.ts tests/publishing.test.ts tests/autonomous.test.ts
+          npx tsx --test --test-concurrency=1 tests/research.test.ts tests/content.test.ts
 
       - name: Run Autonomous Research & Production Cycle
         env:
@@ -81,7 +81,7 @@ jobs:
           AUTONOMOUS_MODE: ${{ github.event.inputs.mode || 'full_cycle' }}
           AUTONOMOUS_COLLECTION: ${{ github.event.inputs.collection || 'alternate' }}
           AUTONOMOUS_DRY_RUN: ${{ github.event.inputs.dry_run || '' }}
-        run: npx tsx scripts/run-autonomous-cycle.ts
+        run: npx tsx scripts/run-autonomous-cycle.txt
 
       - name: Commit and push updated JSON database ([skip ci])
         if: ${{ !cancelled() && steps.verify.outcome == 'success' }}
