@@ -396,11 +396,11 @@ export const StoryGeneratorSection: React.FC<StoryGeneratorSectionProps> = ({
 
       {!geminiConfigured && (
         <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-zinc-700">
-          <span className="font-medium text-zinc-900">AI-генерация (Gemini / GigaChat API) пока не подключена (опционально):</span>{' '}
+          <span className="font-medium text-zinc-900">AI-генерация (Gemini / GigaChat / Z.ai) пока не подключена (опционально):</span>{' '}
           автогенерация и AI-переписывание временно недоступны, но создание черновиков вручную,
           словарь выражений, настройки голоса и экспорт работают в обычном режиме. Ключ{' '}
-          <code>GEMINI_API_KEY</code> или резерв GigaChat API (<code>GIGACHAT_AUTH_KEY</code>)
-          можно подключить позже в серверных секретах.
+          <code>GEMINI_API_KEY</code>, резерв GigaChat (<code>GIGACHAT_AUTH_KEY</code>) или Z.ai (
+          <code>ZAI_API_KEY</code>) можно подключить позже в серверных секретах.
         </div>
       )}
 

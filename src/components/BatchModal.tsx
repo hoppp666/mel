@@ -155,10 +155,10 @@ export const BatchModal: React.FC<BatchModalProps> = ({
           {!pendingBatch && !aiConfigured && (
             <div className="rounded-md border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-zinc-700">
               <span className="font-medium text-zinc-900">
-                AI-провайдер (Gemini / GigaChat API) пока не подключён:
+                AI-провайдер (Gemini / GigaChat / Z.ai) пока не подключён:
               </span>{' '}
-              для AI-генерации партии требуется серверный ключ <code>GEMINI_API_KEY</code> или
-              резервный <code>GIGACHAT_AUTH_KEY</code>. Ручное
+              для AI-генерации партии требуется серверный ключ <code>GEMINI_API_KEY</code>,
+              резервный <code>GIGACHAT_AUTH_KEY</code> или <code>ZAI_API_KEY</code>. Ручное
               добавление сюжетов, импорт JSON, проверка уникальности и все остальные разделы
               работают без ключа.
             </div>
@@ -431,7 +431,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
           ) : (
             <>
               <div className="text-xs text-zinc-500">
-                Серверная генерация через Gemini API (с резервом GigaChat API) и защитой от повторов
+                Серверная генерация через Gemini API (с резервом GigaChat и Z.ai) и защитой от повторов
               </div>
               <div className="flex items-center gap-2.5">
                 <button

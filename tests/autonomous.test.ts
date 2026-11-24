@@ -629,6 +629,8 @@ test('Scenario 8: GitHub Actions workflows have schedule, workflow_dispatch, con
   assert.ok(researchYml.includes('secrets.GEMINI_API_KEY'));
   assert.ok(researchYml.includes('secrets.GIGACHAT_AUTH_KEY'));
   assert.ok(researchYml.includes('GIGACHAT_SCOPE'));
+  assert.ok(researchYml.includes('secrets.ZAI_API_KEY'));
+  assert.ok(researchYml.includes('ZAI_MODEL'));
 
   assert.ok(publishYml.includes('schedule:'));
   assert.ok(publishYml.includes("cron: '0 */2 * * *'"));

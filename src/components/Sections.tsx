@@ -33,9 +33,11 @@ import {
 } from '../shared/categories.js';
 import { SUPABASE_SQL_SCHEMA } from '../shared/similarity.js';
 import {
+  downloadZipArchiveBlob,
   fetchIntegrationStatus,
   getExportCsvUrl,
   getExportJsonUrl,
+  getPatchArchiveUrl,
   getProjectArchiveUrl,
 } from '../services/api.js';
 
@@ -744,7 +746,29 @@ export const ExportSection: React.FC<{
   const [busy, setBusy] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [archiveMessage, setArchiveMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleDownloadZip = async (url: string, filename: string) => {
+    setBusy(true);
+    setArchiveMessage(null);
+    try {
+      const blob = await downloadZipArchiveBlob(url);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+      setArchiveMessage(`Архив ${filename} скачан и проверен (${Math.round(blob.size / 1024)} КБ).`);
+    } catch (err) {
+      setArchiveMessage(err instanceof Error ? err.message : 'Ошибка скачивания архива');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleCopySql = async () => {
     await navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
@@ -861,24 +885,41 @@ export const ExportSection: React.FC<{
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-zinc-900">
-              Полный архив проекта (Этапы 1–4) для переноса на GitHub
+              Архив проекта и пакет обновлённых файлов для переноса на GitHub
             </h3>
             <p className="mt-0.5 text-xs text-zinc-600">
               Содержит сервер, клиент, тесты, конфигурацию и актуальную базу `data/*.json` без
-              временных файлов и секретов.
+              временных файлов и секретов. Перед загрузкой проверяется целостность ZIP-заголовка.
             </p>
           </div>
-          <a
-            href={getProjectArchiveUrl()}
-            download="melo_love_project.zip"
-            className="inline-flex items-center gap-1.5 rounded-md bg-rose-800 px-3.5 py-2 text-xs font-medium text-white hover:bg-rose-900 whitespace-nowrap"
-          >
-            <Archive className="h-3.5 w-3.5" />
-            Скачать проект (.zip)
-          </a>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handleDownloadZip(getPatchArchiveUrl(), 'melo_love_ai_patch.zip')}
+              className="inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-zinc-800 hover:bg-stone-50 whitespace-nowrap cursor-pointer disabled:opacity-50"
+            >
+              <Archive className="h-3.5 w-3.5" />
+              Только обновлённые файлы (.zip)
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handleDownloadZip(getProjectArchiveUrl(), 'melo_love_project.zip')}
+              className="inline-flex items-center gap-1.5 rounded-md bg-rose-800 px-3.5 py-2 text-xs font-medium text-white hover:bg-rose-900 whitespace-nowrap cursor-pointer disabled:opacity-50"
+            >
+              <Archive className="h-3.5 w-3.5" />
+              Скачать весь проект (.zip)
+            </button>
+          </div>
         </div>
+        {archiveMessage && (
+          <div className="rounded border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-zinc-800">
+            {archiveMessage}
+          </div>
+        )}
         <p className="text-xs text-zinc-500">
-          После распаковки архива откройте новый репозиторий на GitHub, выберите «Add file → Upload
+          После распаковки архива откройте репозиторий на GitHub, выберите «Add file → Upload
           files» и перетащите папки проекта в окно браузера, либо выполните `git init && git push`.
         </p>
       </div>
@@ -1146,10 +1187,10 @@ export const SettingsSection: React.FC<{
             <div className="flex items-center justify-between gap-3 px-4 py-2.5">
               <div>
                 <div className="font-medium text-zinc-900">
-                  Google Gemini + резерв GigaChat API (GEMINI_API_KEY / GIGACHAT_AUTH_KEY)
+                  Google Gemini + GigaChat + Z.ai (GEMINI_API_KEY / GIGACHAT_AUTH_KEY / ZAI_API_KEY)
                 </div>
                 <div className="text-zinc-500">
-                  Основной Gemini (gemini-4-hydrogen → gemini-3.1-flash-lite) с автопереключением на GigaChat API при сбое сервера.
+                  Основной Gemini (gemini-4-hydrogen → gemini-3.1-flash-lite) с автопереключением на GigaChat и Z.ai (glm-4.7-flash) при сбое.
                 </div>
               </div>
               <span
@@ -1160,7 +1201,8 @@ export const SettingsSection: React.FC<{
                 {integrations.hasGeminiConfigured
                   ? [
                       integrations.hasGeminiPrimaryConfigured ? 'Gemini' : '',
-                      integrations.hasGigaChatConfigured ? 'GigaChat API' : '',
+                      integrations.hasGigaChatConfigured ? 'GigaChat' : '',
+                      integrations.hasZaiConfigured ? 'Z.ai' : '',
                     ]
                       .filter(Boolean)
                       .join(' + ') || 'Подключён'

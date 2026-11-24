@@ -176,8 +176,8 @@ category, subcategory, title, shortDescription, fullPlot, participants, setting,
         keywords: Array.isArray(item.keywords) ? item.keywords : [],
         ideaSource:
           searchMode === 'web_search'
-            ? `Переосмысление зарубежной механики (Gemini / GigaChat, Партия #${batchNumber})`
-            : `Оригинальная генерация MELO_LOVE (Gemini / GigaChat, Партия #${batchNumber})`,
+            ? `Переосмысление зарубежной механики (Gemini / GigaChat / Z.ai, Партия #${batchNumber})`
+            : `Оригинальная генерация MELO_LOVE (Gemini / GigaChat / Z.ai, Партия #${batchNumber})`,
         sourceUrl: '',
         originType: 'original',
         createdAt: now,
@@ -189,7 +189,7 @@ category, subcategory, title, shortDescription, fullPlot, participants, setting,
         uniqueDetails: item.uniqueDetails || item.unexpectedNuance || '',
         sourceAnalysisNote:
           item.sourceAnalysisNote ||
-          'Сгенерировано через Gemini API (с резервом свободных моделей и GigaChat).',
+          'Сгенерировано через Gemini API (с резервом свободных моделей, GigaChat и Z.ai).',
         batchNumber,
         quality,
         similarityMatches: [],

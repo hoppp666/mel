@@ -248,9 +248,9 @@ export const ForeignResearchSection: React.FC<ForeignResearchSectionProps> = ({
 
       {!geminiConfigured && (
         <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-zinc-700">
-          <span className="font-medium text-zinc-900">AI-анализ (Gemini / GigaChat API) пока не подключён (опционально):</span>{' '}
-          автоматический разбор источников потребует <code>GEMINI_API_KEY</code> или резервный{' '}
-          <code>GIGACHAT_AUTH_KEY</code>, но каталог площадок, проверка
+          <span className="font-medium text-zinc-900">AI-анализ (Gemini / GigaChat / Z.ai) пока не подключён (опционально):</span>{' '}
+          автоматический разбор источников потребует <code>GEMINI_API_KEY</code>,{' '}
+          <code>GIGACHAT_AUTH_KEY</code> или <code>ZAI_API_KEY</code>, но каталог площадок, проверка
           RSS/robots.txt, просмотр карточек и экспорт JSON/CSV полностью работают без ключа.
         </div>
       )}

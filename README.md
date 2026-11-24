@@ -2,11 +2,11 @@
 
 Платформа полного цикла для накопления, смысловой дедупликации, зарубежного исследования, авторской генерации и подготовки публикаций о любви и отношениях в фирменном стиле MELO_LOVE для **Telegram** и **Яндекс Дзена (`@zen_sync_bot`)**.
 
-- **Стек:** React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Motion, Vite 8, Node.js, Express (`server.ts`), Google Gemini (`gemini-4-hydrogen` + резерв `gemini-3.1-flash-lite`) с автоматическим переключением на **GigaChat API** (`GigaChat-2-Pro` → `GigaChat-2` → `GigaChat`).
+- **Стек:** React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Motion, Vite 8, Node.js, Express (`server.ts`), Google Gemini (`gemini-4-hydrogen` + резерв `gemini-3.1-flash-lite`) с автоматическим переключением на **GigaChat API** (`GigaChat-2-Pro` → `GigaChat-2` → `GigaChat`) и **Z.ai** (`glm-4.7-flash` → `glm-4.5-flash`).
 - **Хранение:** локальные JSON-файлы в `data/*.json` с атомарной записью и ротацией до 15 бэкапов на модуль + готовая 6-табличная SQL-схема для **Supabase** (`supabase/schema.sql`).
 - **Подробная техническая сводка проекта:** [`MELO_LOVE_SUMMARY.txt`](./MELO_LOVE_SUMMARY.txt).
 
-> **Важно:** все внешние ключи (`GEMINI_API_KEY`, `GIGACHAT_AUTH_KEY`, `TELEGRAM_BOT_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) **необязательны** для запуска и работы интерфейса. Без ключей работают база сюжетов, ручной редактор, дедупликация, проверка лимитов, режим `Dry-Run` и экспорт файлов. При сбое/перегрузке Gemini (503/429) запрос автоматически переключается на свободные модели и затем на GigaChat (если задан `GIGACHAT_AUTH_KEY`).
+> **Важно:** все внешние ключи (`GEMINI_API_KEY`, `GIGACHAT_AUTH_KEY`, `ZAI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) **необязательны** для запуска и работы интерфейса. Без ключей работают база сюжетов, ручной редактор, дедупликация, проверка лимитов, режим `Dry-Run` и экспорт файлов. При сбое/перегрузке Gemini (503/429) запрос автоматически переключается на свободные модели, затем на GigaChat (`GIGACHAT_AUTH_KEY`) и далее на Z.ai (`ZAI_API_KEY`).
 
 ---
 
@@ -116,6 +116,7 @@ git push -u origin main
 | `GEMINI_API_KEY` | Ключ Google Gemini API (`gemini-4-hydrogen` + резерв `gemini-3.1-flash-lite`) | Нет (нужен для автоанализа и генерации) |
 | `GIGACHAT_AUTH_KEY` | Authorization key из `developers.sber.ru` (резервный или основной AI, без карты) | Нет (резерв при сбоях Gemini) |
 | `GIGACHAT_SCOPE` | Версия доступа GigaChat (`GIGACHAT_API_PERS` по умолчанию для физлиц) | Нет |
+| `ZAI_API_KEY` | API-ключ Z.ai (`glm-4.7-flash` → `glm-4.5-flash`, без VPN и без карты) | Нет (доп. резерв после Gemini/GigaChat) |
 | `TELEGRAM_BOT_TOKEN` | Токен бота от `@BotFather` | Нет (только для live-отправки) |
 | `TELEGRAM_CHANNEL_ID` | Публичный `@username` канала или числовой ID (`-100...`) | Нет (только для live-отправки) |
 | `SUPABASE_URL` | URL проекта Supabase (`https://xxx.supabase.co`) | Нет (только для облачной БД) |
@@ -171,7 +172,7 @@ MELO_LOVE — это единое Node.js + Express-приложение (`serve
 5. В разделе **Environment Variables** (по желанию сейчас или позже) добавьте переменные:
    - `NODE_VERSION` = `22`
    - `TELEGRAM_AUTO_SEND_ENABLED` = `false`
-   - По мере готовности: `GEMINI_API_KEY`, `GIGACHAT_AUTH_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+   - По мере готовности: `GEMINI_API_KEY`, `GIGACHAT_AUTH_KEY`, `ZAI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 6. **Важно про сохранность данных (`data/*.json`):**
    - На бесплатном тарифе Render (Free Instance) диск сбрасывается при каждом перезапуске контейнера или новом деплое — все новые записи, сделанные через интерфейс на сервере, пропадут при рестарте.
    - **Решение 1 (простое на Render):** подключите **Persistent Disk** в настройках Web Service (точка монтирования `/opt/render/project/src/data`, если код лежит в `/opt/render/project/src`, предварительно перенеся стартовые `data/*.json` или экспортировав/импортировав базу после первого старта).

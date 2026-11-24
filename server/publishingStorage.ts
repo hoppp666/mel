@@ -20,6 +20,7 @@ import {
   isAiConfigured,
   isGeminiPrimaryConfigured,
   isGigaChatConfigured,
+  isZaiConfigured,
 } from './aiClient.js';
 
 export const PUBLICATIONS_PATH = path.join(DATA_DIR, 'publications.json');
@@ -195,6 +196,7 @@ export function getTelegramIntegrationStatus(): TelegramIntegrationStatus {
     hasGeminiConfigured: isAiConfigured(),
     hasGeminiPrimaryConfigured: isGeminiPrimaryConfigured(),
     hasGigaChatConfigured: isGigaChatConfigured(),
+    hasZaiConfigured: isZaiConfigured(),
     hasSupabaseConfigured: Boolean(
       supaUrl &&
         supaUrl !== 'MY_SUPABASE_URL' &&

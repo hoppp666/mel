@@ -256,6 +256,25 @@ export function getProjectArchiveUrl(): string {
   return '/api/export/archive';
 }
 
+export function getPatchArchiveUrl(): string {
+  return '/api/export/patch-archive';
+}
+
+export async function downloadZipArchiveBlob(url: string): Promise<Blob> {
+  const res = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error(`Не удалось скачать архив (HTTP ${res.status})`);
+  }
+  const buf = await res.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+    throw new Error(
+      'Сервер вернул не ZIP-файл (возможно, прокси предпросмотра перехватил запрос — откройте приложение в отдельной вкладке браузера).'
+    );
+  }
+  return new Blob([buf], { type: 'application/zip' });
+}
+
 // ============================================================================
 // ЭТАП 2: FOREIGN RESEARCH ENGINE
 // ============================================================================

@@ -333,8 +333,8 @@ async function executeResearchJob(jobId: string, signal: AbortSignal): Promise<v
         baseRecord.analysisStatus = aiConfigured ? 'failed' : 'pending';
         baseRecord.queueStatus = 'research_pending';
         baseRecord.researchNotes = aiConfigured
-          ? 'ИИ-анализ пропущен из-за исчерпания лимита AI (Gemini и GigaChat); материал сохранён для повторного запуска.'
-          : 'ИИ-анализ отложен (не задан GEMINI_API_KEY или резервный GIGACHAT_AUTH_KEY); материал сохранён и готов к анализу после подключения.';
+          ? 'ИИ-анализ пропущен из-за исчерпания лимита AI (Gemini, GigaChat и Z.ai); материал сохранён для повторного запуска.'
+          : 'ИИ-анализ отложен (не заданы GEMINI_API_KEY, GIGACHAT_AUTH_KEY или ZAI_API_KEY); материал сохранён и готов к анализу после подключения.';
       }
 
       // Three-contour deduplication check

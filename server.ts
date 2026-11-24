@@ -447,7 +447,40 @@ async function bootstrap() {
     const { buffer } = buildProjectZipBuffer();
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', 'attachment; filename="melo_love_project.zip"');
-    res.send(buffer);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Length', String(buffer.length));
+    res.end(buffer);
+  });
+
+  app.get('/api/export/patch-archive', (_req, res) => {
+    const patchFiles = [
+      'server.ts',
+      'server/aiClient.ts',
+      'server/publishingStorage.ts',
+      'server/geminiClient.ts',
+      'server/geminiBatch.ts',
+      'server/researchEngine.ts',
+      'server/autonomousScheduler.ts',
+      'server/zipBuilder.ts',
+      'src/shared/types.ts',
+      'src/services/api.ts',
+      '.github/workflows/melo-love-research.yml',
+      '.env.example',
+      'README.md',
+      'tests/autonomous.test.ts',
+      'tests/publishing.test.ts',
+      'src/components/BatchModal.tsx',
+      'src/components/ContentStudioSection.tsx',
+      'src/components/ForeignResearchSection.tsx',
+      'src/components/Sections.tsx',
+      'src/components/StoryGeneratorSection.tsx',
+    ];
+    const { buffer } = buildProjectZipBuffer(process.cwd(), patchFiles);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="melo_love_ai_patch.zip"');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Length', String(buffer.length));
+    res.end(buffer);
   });
 
   // ============================================================================

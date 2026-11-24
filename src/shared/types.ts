@@ -598,6 +598,7 @@ export interface TelegramIntegrationStatus {
   hasGeminiConfigured: boolean;
   hasGeminiPrimaryConfigured?: boolean;
   hasGigaChatConfigured?: boolean;
+  hasZaiConfigured?: boolean;
   hasSupabaseConfigured: boolean;
   autoSendEnabled: boolean;
   dryRunMode: boolean;

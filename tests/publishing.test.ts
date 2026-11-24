@@ -29,6 +29,7 @@ import {
   callChatCompletionJson,
   resolveGeminiModelList,
   resolveGigaChatCredentials,
+  resolveZaiCredentials,
   setGigaChatTransportForTest,
 } from '../server/aiClient.js';
 import {
@@ -298,6 +299,8 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
   const prevGigaClientId = process.env.GIGACHAT_CLIENT_ID;
   const prevGigaClientSecret = process.env.GIGACHAT_CLIENT_SECRET;
   const prevGigaScope = process.env.GIGACHAT_SCOPE;
+  const prevZaiKey = process.env.ZAI_API_KEY;
+  const prevZhipuKey = process.env.ZHIPU_API_KEY;
   const prevGroq = process.env.GROQ_API_KEY;
   const prevAiKey = process.env.AI_API_KEY;
   const prevGroqEndpoint = process.env.GROQ_API_ENDPOINT;
@@ -316,6 +319,8 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
     delete process.env.GIGACHAT_CLIENT_ID;
     delete process.env.GIGACHAT_CLIENT_SECRET;
     delete process.env.GIGACHAT_SCOPE;
+    delete process.env.ZAI_API_KEY;
+    delete process.env.ZHIPU_API_KEY;
     delete process.env.GROQ_API_KEY;
     delete process.env.AI_API_KEY;
     delete process.env.GROQ_API_ENDPOINT;
@@ -331,12 +336,13 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
     assert.equal(status.hasGeminiConfigured, false);
     assert.equal(status.hasGeminiPrimaryConfigured, false);
     assert.equal(status.hasGigaChatConfigured, false);
+    assert.equal(status.hasZaiConfigured, false);
     assert.equal(status.hasBotTokenConfigured, false);
     assert.equal(status.hasSupabaseConfigured, false);
 
     // 2. AI API check reports unconfigured calmly, without crashing module
     assert.equal(isGeminiConfigured(), false);
-    assert.throws(() => getGeminiClient(), /API_KEY_MISSING|GEMINI_API_KEY|GIGACHAT_AUTH_KEY/);
+    assert.throws(() => getGeminiClient(), /API_KEY_MISSING|GEMINI_API_KEY|GIGACHAT_AUTH_KEY|ZAI_API_KEY/);
 
     // 3. Telegram connection check returns structured non-throwing note
     const tgTest = await testTelegramConnection();
@@ -370,6 +376,10 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
     else process.env.GIGACHAT_CLIENT_SECRET = prevGigaClientSecret;
     if (prevGigaScope === undefined) delete process.env.GIGACHAT_SCOPE;
     else process.env.GIGACHAT_SCOPE = prevGigaScope;
+    if (prevZaiKey === undefined) delete process.env.ZAI_API_KEY;
+    else process.env.ZAI_API_KEY = prevZaiKey;
+    if (prevZhipuKey === undefined) delete process.env.ZHIPU_API_KEY;
+    else process.env.ZHIPU_API_KEY = prevZhipuKey;
     if (prevGroq === undefined) delete process.env.GROQ_API_KEY;
     else process.env.GROQ_API_KEY = prevGroq;
     if (prevAiKey === undefined) delete process.env.AI_API_KEY;
@@ -479,5 +489,67 @@ test('Gemini model cascade includes free fallback and GigaChat OAuth + model fai
     else process.env.GIGACHAT_AUTH_KEY = prevGigaAuth;
     if (prevGigaScope === undefined) delete process.env.GIGACHAT_SCOPE;
     else process.env.GIGACHAT_SCOPE = prevGigaScope;
+  }
+});
+
+test('Z.ai additional backup provider defaults to glm-4.7-flash -> glm-4.5-flash and fails over cleanly', async () => {
+  const prevGemini = process.env.GEMINI_API_KEY;
+  const prevGigaAuth = process.env.GIGACHAT_AUTH_KEY;
+  const prevZaiKey = process.env.ZAI_API_KEY;
+  const prevZaiModel = process.env.ZAI_MODEL;
+  const prevFetch = globalThis.fetch;
+
+  try {
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GIGACHAT_AUTH_KEY;
+    delete process.env.ZAI_MODEL;
+    process.env.ZAI_API_KEY = 'zai-test-key-xyz';
+
+    const creds = resolveZaiCredentials();
+    assert.equal(creds.apiKey, 'zai-test-key-xyz');
+    assert.equal(creds.endpoint, 'https://api.z.ai/api/paas/v4/chat/completions');
+    assert.deepEqual(creds.models, ['glm-4.7-flash', 'glm-4.5-flash']);
+
+    const calls: Array<{ url: string; model: string; auth: string | null }> = [];
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      const parsedBody = JSON.parse(String(init?.body || '{}')) as { model: string };
+      calls.push({
+        url: String(url),
+        model: parsedBody.model,
+        auth: headers.get('Authorization'),
+      });
+      if (calls.length === 1) {
+        return new Response(JSON.stringify({ error: { message: 'Busy' } }), { status: 429 });
+      }
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: '{"ok":true,"provider":"zai-flash"}' } }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch;
+
+    const result = await callChatCompletionJson<{ ok: boolean; provider: string }>({
+      systemInstruction: 'Тест JSON',
+      userPrompt: 'Верни JSON',
+    });
+
+    assert.deepEqual(result, { ok: true, provider: 'zai-flash' });
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].url, 'https://api.z.ai/api/paas/v4/chat/completions');
+    assert.equal(calls[0].model, 'glm-4.7-flash');
+    assert.equal(calls[0].auth, 'Bearer zai-test-key-xyz');
+    assert.equal(calls[1].model, 'glm-4.5-flash');
+  } finally {
+    globalThis.fetch = prevFetch;
+    if (prevGemini === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = prevGemini;
+    if (prevGigaAuth === undefined) delete process.env.GIGACHAT_AUTH_KEY;
+    else process.env.GIGACHAT_AUTH_KEY = prevGigaAuth;
+    if (prevZaiKey === undefined) delete process.env.ZAI_API_KEY;
+    else process.env.ZAI_API_KEY = prevZaiKey;
+    if (prevZaiModel === undefined) delete process.env.ZAI_MODEL;
+    else process.env.ZAI_MODEL = prevZaiModel;
   }
 });

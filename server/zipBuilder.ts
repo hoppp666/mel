@@ -62,11 +62,18 @@ function collectFiles(rootDir: string, currentDir = rootDir): string[] {
   return collected;
 }
 
-export function buildProjectZipBuffer(rootDir = process.cwd()): {
+export function buildProjectZipBuffer(
+  rootDir = process.cwd(),
+  onlyFiles?: string[]
+): {
   buffer: Buffer;
   fileCount: number;
 } {
-  const relFiles = collectFiles(rootDir).sort();
+  const relFiles = onlyFiles
+    ? onlyFiles
+        .filter((rel) => fs.existsSync(path.join(rootDir, rel)) && fs.statSync(path.join(rootDir, rel)).isFile())
+        .sort()
+    : collectFiles(rootDir).sort();
   const localChunks: Buffer[] = [];
   const centralChunks: Buffer[] = [];
   let offset = 0;
