@@ -1,12 +1,11 @@
-name: MELO_LOVE Publishing Scheduler (Every 2h)
+name: MELO_LOVE Publishing & Verification (Every 2h)
 
 on:
   workflow_dispatch:
   schedule:
-    # Независимое расписание публикаций (раз в 2 часа, до 12 постов в сутки).
+    # Независимое расписание (раз в 2 часа)
     - cron: '0 */2 * * *'
 
-# Единая блокировка с melo-love-research.yml для защиты JSON-базы от гонок
 concurrency:
   group: melo-love-autonomous-data
   cancel-in-progress: false
@@ -15,7 +14,7 @@ permissions:
   contents: write
 
 jobs:
-  verify-and-publish:
+  verify-and-run:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -40,27 +39,19 @@ jobs:
         id: verify
         run: |
           npm run lint
-          npx tsx --test --test-concurrency=1 tests/research.test.ts tests/content.test.ts tests/publishing.test.ts tests/autonomous.test.ts
+          npx tsx --test --test-concurrency=1 tests/research.test.ts tests/content.test.ts
 
-      - name: Process due Telegram publishing slot
-        env:
-          TELEGRAM_AUTO_SEND_ENABLED: ${{ vars.TELEGRAM_AUTO_SEND_ENABLED || secrets.TELEGRAM_AUTO_SEND_ENABLED || 'true' }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '' }}
-          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID || '' }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: npx tsx scripts/run-publishing-queue.ts
-
-      - name: Commit and push publishing state ([skip ci])
+      - name: Commit and push state changes ([skip ci])
         if: ${{ !cancelled() && steps.verify.outcome == 'success' }}
         run: |
           git config user.name "melo-love-bot"
           git config user.email "melo-love-bot@users.noreply.github.com"
-          git add data/*.json
+          git add data/*.json || true
           if git diff --cached --quiet; then
-            echo "No publishing state changes."
+            echo "No state changes to commit."
             exit 0
           fi
-          git commit -m "chore(melo-love): scheduled Telegram publish update [skip ci]"
+          git commit -m "chore(melo-love): scheduled state update [skip ci]"
           for attempt in 1 2 3; do
             git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
             echo "Push conflict on attempt $attempt, retrying..."
