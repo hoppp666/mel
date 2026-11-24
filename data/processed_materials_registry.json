@@ -299,11 +299,12 @@
     "collection": "romantic",
     "discoveredAt": "2026-11-11T18:00:00.000Z",
     "contentFingerprint": "оборудованн|мастерск|лодж|цен|отложенн|велосипед|тих|забот|вмест|громких|слов|добровольн|отсрочк|собственн|покупк|рад|возвращен|давн|мечт|партнер|дмитр|собиралс|афиширов|жертв",
-    "status": "ready",
+    "status": "published_to_telegram",
     "storyId": "ML-R-0009",
-    "updatedAt": "2026-11-24T03:51:30.080Z",
+    "updatedAt": "2026-11-24T17:22:53.992Z",
     "contentId": "ML-P-R-000009",
-    "publicationId": "PUB-R-000001"
+    "publicationId": "PUB-R-000001",
+    "telegramMessageId": 18
   },
   {
     "id": "REG-000112",
