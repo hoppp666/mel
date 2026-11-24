@@ -1,299 +1,248 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   Archive,
   Check,
   Copy,
   Database,
   Download,
   ExternalLink,
-  GitMerge,
-  Plus,
+  FolderPlus,
   RefreshCw,
   RotateCcw,
   ShieldCheck,
+  Sparkles,
   Upload,
 } from 'lucide-react';
 import {
+  EXTERNAL_SOURCE_GUIDES,
+  getCategoriesForCollection,
+} from '../shared/categories.ts';
+import { SUPABASE_SQL_SCHEMA } from '../shared/similarity.ts';
+import type {
   AppSettings,
-  BackupEntry,
   BatchRecord,
   CollectionType,
-  CustomCategory,
   DatabaseStats,
   NavSection,
-  PendingBatch,
+  SimilarityMatch,
   StoryPlot,
-  TelegramIntegrationStatus,
-} from '../shared/types.js';
-import {
-  DEBATE_CATEGORIES,
-  PLOT_MECHANICS,
-  REFERENCE_FOREIGN_PLATFORMS,
-  ROMANTIC_CATEGORIES,
-} from '../shared/categories.js';
-import { SUPABASE_SQL_SCHEMA } from '../shared/similarity.js';
-import {
-  downloadZipArchiveBlob,
-  fetchIntegrationStatus,
-  getExportCsvUrl,
-  getExportJsonUrl,
-  getPatchArchiveUrl,
-  getProjectArchiveUrl,
-} from '../services/api.js';
+  VerificationStatus,
+} from '../shared/types.ts';
+import * as api from '../services/api.ts';
+import type { BackupSnapshotInfo, StagedBatch } from '../services/api.ts';
 
-// ============================================================================
-// 1. OVERVIEW SECTION
-// ============================================================================
-
+/* ============================================================================
+   1. ОБЩИЙ ОБЗОР (OVERVIEW)
+   ============================================================================ */
 export const OverviewSection: React.FC<{
   stats: DatabaseStats;
   settings: AppSettings;
-  batches: BatchRecord[];
-  pendingBatch: PendingBatch | null;
   stories: StoryPlot[];
-  onNavigate: (section: NavSection) => void;
-  onOpenBatchModal: () => void;
-  onOpenStory: (story: StoryPlot) => void;
+  batches: BatchRecord[];
+  stagedBatch: StagedBatch | null;
+  onNavigate: (section: NavSection, categoryFilter?: string) => void;
+  onLaunchBatch: (collection?: CollectionType) => void;
+  onSelectStory: (story: StoryPlot) => void;
 }> = ({
   stats,
   settings,
-  batches,
-  pendingBatch,
   stories,
+  batches,
+  stagedBatch,
   onNavigate,
-  onOpenBatchModal,
-  onOpenStory,
+  onLaunchBatch,
+  onSelectStory,
 }) => {
-  const debatePct = Math.min(100, Math.round((stats.debateCount / Math.max(1, settings.targetDebate)) * 100));
-  const romanticPct = Math.min(100, Math.round((stats.romanticCount / Math.max(1, settings.targetRomantic)) * 100));
-
-  const recentStories = useMemo(() => stories.slice(-6).reverse(), [stories]);
+  const recentStories = useMemo(() => stories.slice(0, 6), [stories]);
 
   return (
     <div className="space-y-6">
-      {/* Pending Batch Banner */}
-      {pendingBatch && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-amber-300 bg-amber-50 px-5 py-3.5">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-amber-900">
-              Партия #{pendingBatch.batchNumber} ожидает приёмки
-            </div>
-            <p className="mt-0.5 text-sm text-amber-950">
-              {pendingBatch.candidates.length} кандидатов в буфере ·{' '}
-              {pendingBatch.collection === 'debate' ? 'Споры и мнения' : 'Романтика'}
-            </p>
+      {/* Header Row */}
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Интеллектуальная библиотека сюжетов MELO_LOVE
+          </h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Центральное хранилище проверенных сюжетных основ для будущих публикаций: контроль
+            уникальности, оценка качества и пакетное пополнение.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onLaunchBatch('debate')}
+          className="inline-flex items-center gap-2 rounded-md bg-indigo-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 whitespace-nowrap shrink-0"
+        >
+          <Sparkles className="h-4 w-4" />
+          Создать следующую партию
+        </button>
+      </div>
+
+      {/* Staged batch reminder if unfinished */}
+      {stagedBatch && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-indigo-200 bg-indigo-50/70 px-5 py-3.5">
+          <div className="text-sm text-indigo-950">
+            <strong>Незавершённая проверка партии #{stagedBatch.batchNumber}:</strong> в очереди{' '}
+            <span className="font-mono font-semibold tabular-nums">
+              {stagedBatch.candidates.length}
+            </span>{' '}
+            сюжетов ({stagedBatch.collection === 'debate' ? 'Кто здесь прав?' : 'Романтические'}).
           </div>
           <button
             type="button"
-            onClick={onOpenBatchModal}
-            className="rounded-md bg-amber-900 px-3.5 py-2 text-xs font-medium text-white hover:bg-amber-950 whitespace-nowrap cursor-pointer"
+            onClick={() => onLaunchBatch(stagedBatch.collection)}
+            className="rounded-md bg-indigo-700 px-4 py-1.5 text-xs font-semibold text-white hover:bg-indigo-800 whitespace-nowrap"
           >
-            Открыть приёмку партии
+            Продолжить проверку партии
           </button>
         </div>
       )}
 
       {/* Primary KPI Grid */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-lg border border-stone-200 bg-white p-5">
-          <div className="text-xs font-medium text-zinc-500">Всего сюжетов в базе</div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="font-mono text-3xl font-semibold tracking-tight text-zinc-900 tabular-nums">
-              {stats.total}
-            </span>
-            <span className="font-mono text-xs text-zinc-400 tabular-nums">
-              / {settings.targetTotal}
-            </span>
+        <KpiBox
+          label="Всего сюжетов в базе"
+          value={stats.total}
+          sub={`Цель: ${settings.targetTotalStories.toLocaleString('ru-RU')} записей`}
+        />
+        <KpiBox
+          label="Коллекция A: Кто здесь прав?"
+          value={stats.debateTotal}
+          sub={`${stats.debateProgressPercent}% от цели ${settings.targetDebateStories}`}
+          onClick={() => onNavigate('debate')}
+        />
+        <KpiBox
+          label="Коллекция B: Романтические"
+          value={stats.romanticTotal}
+          sub={`${stats.romanticProgressPercent}% от цели ${settings.targetRomanticStories}`}
+          onClick={() => onNavigate('romantic')}
+        />
+        <KpiBox
+          label="Проверено и принято"
+          value={stats.approved}
+          sub={`Средний балл качества: ${stats.averageQuality}/100`}
+        />
+      </div>
+
+      {/* Secondary Operational Metrics */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiBox
+          label="Ожидает проверки"
+          value={stats.pending}
+          sub="В очереди редактора"
+          onClick={() => onNavigate('quality')}
+        />
+        <KpiBox
+          label="На доработке"
+          value={stats.needsRevision}
+          sub="Нужно усилить детали"
+          onClick={() => onNavigate('quality')}
+        />
+        <KpiBox
+          label="Отклонено"
+          value={stats.rejected}
+          sub="Не прошли порог качества"
+        />
+        <KpiBox
+          label="Совпадений / дублей"
+          value={stats.duplicatesDetected}
+          sub="Смысловой фильтр уникальности"
+          onClick={() => onNavigate('uniqueness')}
+        />
+      </div>
+
+      {/* Progress to 3000 */}
+      <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">
+              Прогресс накопления целевой библиотеки (3000 проверенных сюжетов)
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Порядок наполнения: партии 1–30 — дискуссионные истории, партии 31–60 — романтические
+              истории.
+            </p>
           </div>
-          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-stone-100">
-            <div
-              className="h-full bg-zinc-900"
-              style={{ width: `${Math.min(100, stats.progressPercent)}%` }}
-            />
-          </div>
+          <span className="font-mono text-sm font-semibold text-slate-900 tabular-nums">
+            {stats.approved} / {settings.targetTotalStories} ({stats.progressPercent}%)
+          </span>
         </div>
 
-        <div className="rounded-lg border border-stone-200 bg-white p-5">
-          <div className="text-xs font-medium text-zinc-500">Споры / Романтика</div>
-          <div className="mt-2 font-mono text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums">
-            {stats.debateCount} / {stats.romanticCount}
-          </div>
-          <div className="mt-2 text-xs text-zinc-500 font-mono tabular-nums">
-            Прогресс: {debatePct}% · {romanticPct}%
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-stone-200 bg-white p-5">
-          <div className="text-xs font-medium text-zinc-500">Подтверждено / Свободно</div>
-          <div className="mt-2 font-mono text-2xl font-semibold tracking-tight text-teal-800 tabular-nums">
-            {stats.approvedCount} / {stats.unusedCount}
-          </div>
-          <div className="mt-2 text-xs text-zinc-500 font-mono tabular-nums">
-            Ожидают: {stats.pendingCount} · Доработка: {stats.needsRevisionCount}
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-stone-200 bg-white p-5">
-          <div className="text-xs font-medium text-zinc-500">Средний балл / Дубли</div>
-          <div className="mt-2 flex items-baseline gap-3">
-            <span className="font-mono text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums">
-              {stats.averageQuality}/100
-            </span>
-            <span
-              className={`font-mono text-xs tabular-nums ${
-                stats.duplicatesCount > 0 ? 'text-rose-700 font-semibold' : 'text-teal-700'
-              }`}
-            >
-              дублей: {stats.duplicatesCount}
-            </span>
-          </div>
-          <div className="mt-2 text-xs text-zinc-500 font-mono tabular-nums">
-            Внешние: {stats.externalCount} · Оригин.: {stats.originalCount}
-          </div>
+        <div className="space-y-3">
+          <ProgressBar
+            label="Коллекция A — «Кто здесь прав?» (цель 1500)"
+            current={stats.debateTotal}
+            target={settings.targetDebateStories}
+            percent={stats.debateProgressPercent}
+          />
+          <ProgressBar
+            label="Коллекция B — «Романтические истории» (цель 1500)"
+            current={stats.romanticTotal}
+            target={settings.targetRomanticStories}
+            percent={stats.romanticProgressPercent}
+          />
         </div>
       </div>
 
-      {/* Stage Pipeline Quick Jump */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-lg border border-stone-200 bg-white p-5 flex flex-col justify-between gap-4">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-              Этап 1 · Пополнение базы
-            </div>
-            <h3 className="mt-1 text-base font-semibold text-zinc-900">
-              Генератор партий (10–50 сюжетов)
-            </h3>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-600">
-              Сбалансированное наполнение категорий споров и романтики с автоматической проверкой
-              дублей и очередью приёмки.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onOpenBatchModal}
-            className="self-start rounded-md bg-zinc-900 px-3.5 py-2 text-xs font-medium text-white hover:bg-zinc-800 cursor-pointer"
-          >
-            Создать следующую партию
-          </button>
-        </div>
-
-        <div className="rounded-lg border border-stone-200 bg-white p-5 flex flex-col justify-between gap-4">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-              Этап 2 · Зарубежные площадки
-            </div>
-            <h3 className="mt-1 text-base font-semibold text-zinc-900">
-              Foreign Research Engine
-            </h3>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-600">
-              13 открытых источников (Reddit, NYT Modern Love, The Cut, Psychology Today), анализ
-              живых ситуаций и 3-контурная дедупликация.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onNavigate('research')}
-            className="self-start rounded-md border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-zinc-800 hover:bg-stone-50 cursor-pointer"
-          >
-            Открыть исследование источников
-          </button>
-        </div>
-
-        <div className="rounded-lg border border-stone-200 bg-white p-5 flex flex-col justify-between gap-4">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-              Этап 3 · Редакционный голос
-            </div>
-            <h3 className="mt-1 text-base font-semibold text-zinc-900">
-              Story Generator & Voice Engine
-            </h3>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-600">
-              Генерация публикаций из утверждённых сюжетов, 5 голосовых пресетов, словарь
-              выражений и антиштамп-контроль качества.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onNavigate('generator')}
-            className="self-start rounded-md border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-zinc-800 hover:bg-stone-50 cursor-pointer"
-          >
-            Перейти в Story Generator
-          </button>
-        </div>
-      </div>
-
-      {/* Two-column lower section */}
+      {/* Two-Column Lower Workspace: Batch Log + Recent Additions */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Recent stories */}
-        <div className="rounded-lg border border-stone-200 bg-white">
-          <div className="flex items-center justify-between border-b border-stone-200 px-5 py-3.5">
-            <h3 className="text-sm font-semibold text-zinc-900">Последние сюжеты в базе</h3>
-            <button
-              type="button"
-              onClick={() => onNavigate('debate')}
-              className="text-xs font-medium text-rose-800 hover:text-rose-900 cursor-pointer"
-            >
-              Все сюжеты →
-            </button>
+        <div className="rounded-lg border border-slate-200 bg-white p-5">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h2 className="text-base font-semibold text-slate-900">Журнал партий</h2>
+            <span className="font-mono text-xs text-slate-500 tabular-nums">
+              Всего партий: {batches.length}
+            </span>
           </div>
-          <div className="divide-y divide-stone-200">
-            {recentStories.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => onOpenStory(s)}
-                className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left hover:bg-stone-50 cursor-pointer"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-xs text-zinc-500">
-                    <span className="font-mono text-zinc-700">{s.id}</span>
-                    <span>·</span>
-                    <span>{s.category}</span>
-                  </div>
-                  <div className="truncate text-sm font-medium text-zinc-900">{s.title}</div>
+          <div className="mt-3 divide-y divide-slate-100">
+            {batches.slice(0, 8).map((b) => (
+              <div key={`${b.batchNumber}-${b.createdAt}`} className="py-3 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-slate-900">
+                    <span className="font-mono">Партия #{b.batchNumber}</span> ·{' '}
+                    {b.collection === 'debate' ? 'Кто здесь прав?' : 'Романтические'}
+                  </span>
+                  <span className="font-mono text-slate-500 tabular-nums">
+                    {new Date(b.createdAt).toLocaleDateString('ru-RU')}
+                  </span>
                 </div>
-                <div className="font-mono text-xs font-semibold text-zinc-700 tabular-nums shrink-0">
-                  {s.quality?.overall ?? 0}/100
-                </div>
-              </button>
+                <p className="mt-1 text-slate-600">{b.notes}</p>
+              </div>
             ))}
           </div>
         </div>
 
-        {/* Batch log */}
-        <div className="rounded-lg border border-stone-200 bg-white">
-          <div className="border-b border-stone-200 px-5 py-3.5">
-            <h3 className="text-sm font-semibold text-zinc-900">Журнал партий наполнения</h3>
+        <div className="rounded-lg border border-slate-200 bg-white p-5">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h2 className="text-base font-semibold text-slate-900">Недавние сюжеты в базе</h2>
+            <button
+              type="button"
+              onClick={() => onNavigate('debate')}
+              className="text-xs font-medium text-indigo-700 hover:underline"
+            >
+              Перейти ко всем →
+            </button>
           </div>
-          <div className="divide-y divide-stone-200">
-            {batches.length === 0 ? (
-              <div className="px-5 py-8 text-center text-xs text-zinc-500">
-                Партии ещё не фиксировались
+          <div className="mt-3 divide-y divide-slate-100">
+            {recentStories.map((s) => (
+              <div key={s.id} className="py-3">
+                <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                  <span>
+                    <span className="font-mono text-slate-700">{s.id}</span> · {s.category}
+                  </span>
+                  <span className="font-mono font-medium text-slate-800 tabular-nums">
+                    {s.quality.overall}/100
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onSelectStory(s)}
+                  className="mt-0.5 text-left text-sm font-medium text-slate-900 hover:text-indigo-700"
+                >
+                  {s.title}
+                </button>
               </div>
-            ) : (
-              batches
-                .slice()
-                .reverse()
-                .slice(0, 8)
-                .map((b) => (
-                  <div key={`${b.collection}-${b.batchNumber}-${b.createdAt}`} className="px-5 py-3 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-semibold text-zinc-900 tabular-nums">
-                        Партия #{b.batchNumber} ·{' '}
-                        {b.collection === 'debate' ? 'Споры' : 'Романтика'}
-                      </span>
-                      <span className="font-mono text-zinc-500 tabular-nums">
-                        +{b.approvedCount} одобр. / {b.generatedCount} всего
-                      </span>
-                    </div>
-                    <div className="mt-1 text-zinc-500">
-                      Фокус: {b.categoryFocus} · Режим:{' '}
-                      {b.searchMode === 'web_search' ? 'Веб-поиск' : 'Оригинальные'}
-                      {b.note ? ` · ${b.note}` : ''}
-                    </div>
-                  </div>
-                ))
-            )}
+            ))}
           </div>
         </div>
       </div>
@@ -301,242 +250,285 @@ export const OverviewSection: React.FC<{
   );
 };
 
-// ============================================================================
-// 2. CATEGORIES SECTION
-// ============================================================================
-
+/* ============================================================================
+   2. КАТЕГОРИИ (CATEGORIES)
+   ============================================================================ */
 export const CategoriesSection: React.FC<{
   stories: StoryPlot[];
-  customCategories: CustomCategory[];
-  onCreateCategory: (payload: {
-    collection: CollectionType;
-    name: string;
-    subcategories: string[];
-  }) => Promise<void>;
-}> = ({ stories, customCategories, onCreateCategory }) => {
-  const [collection, setCollection] = useState<CollectionType>('debate');
-  const [name, setName] = useState('');
-  const [subtext, setSubtext] = useState('');
-  const [saving, setSaving] = useState(false);
+  customCategories: { debate: string[]; romantic: string[] };
+  onAddCategory: (collection: CollectionType, name: string) => Promise<void>;
+  onOpenCollectionCategory: (collection: CollectionType, category: string) => void;
+}> = ({ stories, customCategories, onAddCategory, onOpenCollectionCategory }) => {
+  const [activeCollection, setActiveCollection] = useState<CollectionType>('debate');
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [adding, setAdding] = useState(false);
 
-  const countMap = useMemo(() => {
+  const categories = getCategoriesForCollection(activeCollection, customCategories);
+
+  const countsByCat = useMemo(() => {
     const map = new Map<string, number>();
     for (const s of stories) {
-      const key = `${s.collection}:${s.category}`;
-      map.set(key, (map.get(key) || 0) + 1);
+      if (s.collection === activeCollection && s.verificationStatus !== 'rejected') {
+        map.set(s.category, (map.get(s.category) ?? 0) + 1);
+      }
     }
     return map;
-  }, [stories]);
+  }, [stories, activeCollection]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    setSaving(true);
+    if (!newCategoryName.trim()) return;
+    setAdding(true);
     try {
-      await onCreateCategory({
-        collection,
-        name: name.trim(),
-        subcategories: subtext
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
-      });
-      setName('');
-      setSubtext('');
+      await onAddCategory(activeCollection, newCategoryName.trim());
+      setNewCategoryName('');
     } finally {
-      setSaving(false);
+      setAdding(false);
     }
-  };
-
-  const renderGrid = (col: CollectionType, baseCats: string[]) => {
-    const custom = customCategories.filter((c) => c.collection === col).map((c) => c.name);
-    const all = Array.from(new Set([...baseCats, ...custom]));
-    return (
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {all.map((cat) => {
-          const count = countMap.get(`${col}:${cat}`) || 0;
-          return (
-            <div
-              key={`${col}-${cat}`}
-              className="flex items-center justify-between rounded border border-stone-200 bg-white px-3.5 py-2.5 text-sm"
-            >
-              <span className="truncate text-zinc-800">{cat}</span>
-              <span
-                className={`font-mono text-xs tabular-nums ${
-                  count === 0 ? 'text-zinc-400' : 'font-semibold text-zinc-900'
-                }`}
-              >
-                {count}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    );
   };
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-stone-200 pb-4">
-        <h2 className="text-xl font-semibold text-zinc-900">Категории и подтемы</h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          Покрытие {DEBATE_CATEGORIES.length} тем раздела споров, {ROMANTIC_CATEGORIES.length} тем
-          романтики и {PLOT_MECHANICS.length} сюжетных механик.
-        </p>
-      </div>
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Тематическая карта и баланс категорий
+          </h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Контроль наполнения всех направлений для равномерного роста базы к 3000 сюжетов.
+          </p>
+        </div>
 
-      {/* Add custom category */}
-      <form
-        onSubmit={handleSubmit}
-        className="rounded-lg border border-stone-200 bg-white p-4 grid grid-cols-1 gap-3 md:grid-cols-12 items-end"
-      >
-        <label className="block text-xs font-medium text-zinc-700 md:col-span-3">
-          Раздел
-          <select
-            value={collection}
-            onChange={(e) => setCollection(e.target.value as CollectionType)}
-            className="mt-1 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm"
-          >
-            <option value="debate">Споры и мнения</option>
-            <option value="romantic">Романтические истории</option>
-          </select>
-        </label>
-        <label className="block text-xs font-medium text-zinc-700 md:col-span-4">
-          Новая категория
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Например: Общие финансы после рождения ребёнка"
-            className="mt-1 w-full rounded-md border border-stone-200 px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="block text-xs font-medium text-zinc-700 md:col-span-3">
-          Подтемы (через запятую)
-          <input
-            type="text"
-            value={subtext}
-            onChange={(e) => setSubtext(e.target.value)}
-            placeholder="Бюджет, декрет, помощь родни"
-            className="mt-1 w-full rounded-md border border-stone-200 px-3 py-2 text-sm"
-          />
-        </label>
-        <div className="md:col-span-2">
+        <div className="flex items-center gap-1 rounded-md bg-slate-100 p-1">
           <button
-            type="submit"
-            disabled={saving || !name.trim()}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
+            type="button"
+            onClick={() => setActiveCollection('debate')}
+            className={`rounded px-3 py-1.5 text-xs font-medium whitespace-nowrap ${
+              activeCollection === 'debate'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
           >
-            <Plus className="h-4 w-4" />
-            Добавить
+            Кто здесь прав? ({getCategoriesForCollection('debate', customCategories).length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveCollection('romantic')}
+            className={`rounded px-3 py-1.5 text-xs font-medium whitespace-nowrap ${
+              activeCollection === 'romantic'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Романтические ({getCategoriesForCollection('romantic', customCategories).length})
           </button>
         </div>
+      </div>
+
+      {/* Add new direction */}
+      <form
+        onSubmit={handleAdd}
+        className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white p-4"
+      >
+        <input
+          type="text"
+          value={newCategoryName}
+          onChange={(e) => setNewCategoryName(e.target.value)}
+          placeholder="Добавить новое тематическое направление (например, «Соседство и дача»)..."
+          className="min-w-[260px] flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+        />
+        <button
+          type="submit"
+          disabled={adding || !newCategoryName.trim()}
+          className="inline-flex items-center gap-1.5 rounded-md bg-indigo-700 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-800 disabled:opacity-50 whitespace-nowrap"
+        >
+          <FolderPlus className="h-3.5 w-3.5" />
+          Добавить категорию
+        </button>
       </form>
 
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-zinc-900">
-          Споры и мнения ({DEBATE_CATEGORIES.length})
-        </h3>
-        {renderGrid('debate', DEBATE_CATEGORIES)}
-      </div>
-
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-zinc-900">
-          Романтические и трогательные истории ({ROMANTIC_CATEGORIES.length})
-        </h3>
-        {renderGrid('romantic', ROMANTIC_CATEGORIES)}
-      </div>
-
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-zinc-900">
-          Сюжетные механики ({PLOT_MECHANICS.length})
-        </h3>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {PLOT_MECHANICS.map((mech) => (
-            <div
-              key={mech}
-              className="rounded border border-stone-200 bg-white px-3.5 py-2 text-xs text-zinc-700"
+      {/* Grid */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {categories.map((cat) => {
+          const count = countsByCat.get(cat) ?? 0;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => onOpenCollectionCategory(activeCollection, cat)}
+              className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:border-indigo-300 hover:bg-slate-50"
             >
-              {mech}
-            </div>
-          ))}
-        </div>
+              <span className="truncate pr-3 text-sm font-medium text-slate-900">{cat}</span>
+              <span
+                className={`font-mono text-xs font-semibold tabular-nums ${
+                  count === 0 ? 'text-slate-400' : 'text-indigo-700'
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 };
 
-// ============================================================================
-// 3. SOURCES REFERENCE SECTION
-// ============================================================================
+/* ============================================================================
+   3. ЗАРУБЕЖНЫЕ ИСТОЧНИКИ (EXTERNAL SOURCES)
+   ============================================================================ */
+export const SourcesSection: React.FC<{
+  stories: StoryPlot[];
+  onLaunchSearchBatch: () => void;
+  onSelectStory: (story: StoryPlot) => void;
+}> = ({ stories, onLaunchSearchBatch, onSelectStory }) => {
+  const externalStories = useMemo(
+    () => stories.filter((s) => s.originType === 'external'),
+    [stories]
+  );
 
-export const SourcesReferenceSection: React.FC<{
-  onNavigateResearch: () => void;
-}> = ({ onNavigateResearch }) => {
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 pb-4">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
-          <h2 className="text-xl font-semibold text-zinc-900">Каталог источников идей</h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            Проверенные англоязычные площадки и медиа для поиска реальных жизненных конфликтов и
-            романтических наблюдений.
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Исследование зарубежных источников
+          </h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Реестр международных площадок для поиска житейских механик. Внешний URL сохраняется
+            строго при подтверждении реальным поиском — вымышленные ссылки запрещены.
           </p>
         </div>
         <button
           type="button"
-          onClick={onNavigateResearch}
-          className="rounded-md bg-zinc-900 px-3.5 py-2 text-xs font-medium text-white hover:bg-zinc-800 cursor-pointer"
+          onClick={onLaunchSearchBatch}
+          className="inline-flex items-center gap-2 rounded-md bg-indigo-700 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-800 whitespace-nowrap"
         >
-          Открыть живой парсинг в Foreign Research →
+          <Sparkles className="h-3.5 w-3.5" />
+          Запустить партию с Google Search
         </button>
       </div>
 
-      <div className="divide-y divide-stone-200 rounded-lg border border-stone-200 bg-white">
-        {REFERENCE_FOREIGN_PLATFORMS.map((src) => (
+      {/* Transparency summary */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <KpiBox
+          label="Оригинальные сюжеты"
+          value={stories.filter((s) => s.originType === 'original').length}
+          sub="Явно помечены без внешнего URL"
+        />
+        <KpiBox
+          label="Вдохновлено внешними источниками"
+          value={externalStories.length}
+          sub="С подтверждённым URL и аналитической заметкой"
+        />
+        <KpiBox
+          label="Приоритетных площадок"
+          value={EXTERNAL_SOURCE_GUIDES.length}
+          sub="Reddit, NYT Modern Love, The Cut"
+        />
+      </div>
+
+      {/* Source Directory */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {EXTERNAL_SOURCE_GUIDES.map((src) => (
           <div
-            key={src.url}
-            className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
+            key={src.id}
+            className="rounded-lg border border-slate-200 bg-white p-5 space-y-2.5"
           >
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs text-zinc-500">
-                <span className="uppercase font-mono">{src.type}</span>
-                <span>·</span>
-                <span>
-                  {src.focus === 'debate'
-                    ? 'Споры'
-                    : src.focus === 'romantic'
-                      ? 'Романтика'
-                      : 'Споры и романтика'}
-                </span>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs text-slate-500">{src.platform}</div>
+                <h3 className="text-base font-semibold text-slate-900">{src.name}</h3>
               </div>
-              <div className="text-sm font-semibold text-zinc-900">{src.name}</div>
-              <p className="text-xs text-zinc-600">{src.notes}</p>
+              <a
+                href={src.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 hover:underline shrink-0"
+              >
+                Открыть <ExternalLink className="h-3 w-3" />
+              </a>
             </div>
-            <div className="flex items-center gap-2 text-xs font-mono text-zinc-500">
-              <ExternalLink className="h-3.5 w-3.5" />
-              <span className="truncate max-w-[260px]">{src.url}</span>
+            <p className="text-xs leading-relaxed text-slate-600">{src.focus}</p>
+            <div className="border-t border-slate-100 pt-2 text-xs text-slate-700">
+              <strong>Ключевые механики:</strong> {src.mechanicsExtracted.join(' · ')}
+            </div>
+            <div className="text-xs text-slate-500">
+              <strong>Принцип переосмысления:</strong> {src.adaptationPrinciples}
             </div>
           </div>
         ))}
+      </div>
+
+      {/* External stories ledger */}
+      <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <h2 className="text-base font-semibold text-slate-900">
+          Записи с подтверждёнными внешними ссылками
+        </h2>
+        {externalStories.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">
+            Пока все {stories.length} стартовых сюжетов созданы как оригинальные редакционные
+            разработки (без вымышленных URL). Запустите партию в режиме «Google Search + адаптация»
+            или добавьте проверенный источник вручную в паспорте сюжета.
+          </p>
+        ) : (
+          <div className="mt-3 divide-y divide-slate-100">
+            {externalStories.map((s) => (
+              <div key={s.id} className="py-3 flex items-start justify-between gap-4">
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => onSelectStory(s)}
+                    className="text-sm font-semibold text-slate-900 hover:text-indigo-700 text-left"
+                  >
+                    {s.id} · {s.title}
+                  </button>
+                  <p className="mt-0.5 text-xs text-slate-600">
+                    {s.sourceAnalysisNote || s.ideaSource}
+                  </p>
+                </div>
+                {s.sourceUrl && (
+                  <a
+                    href={s.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-indigo-700 hover:underline shrink-0"
+                  >
+                    Источник <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-// ============================================================================
-// 4. UNIQUENESS SECTION
-// ============================================================================
-
+/* ============================================================================
+   4. ПРОВЕРКА УНИКАЛЬНОСТИ (UNIQUENESS CONSOLE)
+   ============================================================================ */
 export const UniquenessSection: React.FC<{
   stories: StoryPlot[];
-  similarityThreshold: number;
+  threshold: number;
   onRescan: () => Promise<void>;
-  onOpenStory: (story: StoryPlot) => void;
-  onMergeStories: (payload: { targetStoryId: string; nuanceToAppend: string }) => Promise<void>;
-}> = ({ stories, similarityThreshold, onRescan, onOpenStory, onMergeStories }) => {
+  onSelectStory: (story: StoryPlot) => void;
+}> = ({ stories, threshold, onRescan, onSelectStory }) => {
   const [scanning, setScanning] = useState(false);
-  const flagged = useMemo(() => stories.filter((s) => s.duplicateFlag), [stories]);
+  const [testTitle, setTestTitle] = useState('');
+  const [testPlot, setTestPlot] = useState('');
+  const [testCollection, setTestCollection] = useState<CollectionType>('debate');
+  const [testMatches, setTestMatches] = useState<SimilarityMatch[] | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const flaggedStories = useMemo(
+    () =>
+      stories.filter(
+        (s) => s.duplicateFlag || (s.similarityMatches && s.similarityMatches.length > 0)
+      ),
+    [stories]
+  );
 
   const handleRescan = async () => {
     setScanning(true);
@@ -547,182 +539,177 @@ export const UniquenessSection: React.FC<{
     }
   };
 
+  const handleTestCheck = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testTitle.trim() && !testPlot.trim()) return;
+    setChecking(true);
+    try {
+      const res = await api.checkSimilarity({
+        collection: testCollection,
+        title: testTitle,
+        shortDescription: testPlot,
+        fullPlot: testPlot,
+        coreConflictOrAction: testPlot,
+      });
+      setTestMatches(res.matches);
+    } finally {
+      setChecking(false);
+    }
+  };
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 pb-4">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
-          <h2 className="text-xl font-semibold text-zinc-900">Контроль смысловой уникальности</h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            Проверка URL, семантических отпечатков и биграмм при пороге{' '}
-            <span className="font-mono tabular-nums">{similarityThreshold}%</span>.
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Проверка смысловой уникальности
+          </h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Анализ лексико-тематической и структурной близости по отпечатку, теме, участникам и
+            механике (порог срабатывания: <span className="font-mono">{threshold}%</span>).
           </p>
         </div>
         <button
           type="button"
-          disabled={scanning}
           onClick={handleRescan}
-          className="inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
+          disabled={scanning}
+          className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
         >
-          <RefreshCw className={`h-4 w-4 ${scanning ? 'animate-spin' : ''}`} />
-          {scanning ? 'Пересканируем базу...' : 'Пересканировать все сюжеты'}
+          <RefreshCw className={`h-3.5 w-3.5 ${scanning ? 'animate-spin' : ''}`} />
+          {scanning ? 'Пересканирование...' : 'Перепроверить всю базу'}
         </button>
       </div>
 
-      {flagged.length === 0 ? (
-        <div className="rounded-lg border border-stone-200 bg-white px-6 py-12 text-center space-y-2">
-          <ShieldCheck className="mx-auto h-7 w-7 text-teal-700" />
-          <div className="text-sm font-semibold text-zinc-900">
-            Дублей и смысловых пересечений не обнаружено
-          </div>
-          <p className="text-xs text-zinc-500">
-            Все {stories.length} сюжетов в базе имеют самостоятельный конфликт или уникальный нюанс.
-          </p>
+      {/* Live Idea Sandbox Checker */}
+      <form
+        onSubmit={handleTestCheck}
+        className="rounded-lg border border-slate-200 bg-white p-5 space-y-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-slate-900">
+            Проверить новую идею на смысловой повтор перед добавлением
+          </h2>
+          <select
+            value={testCollection}
+            onChange={(e) => setTestCollection(e.target.value as CollectionType)}
+            className="rounded border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-800"
+          >
+            <option value="debate">Коллекция A: Кто здесь прав?</option>
+            <option value="romantic">Коллекция B: Романтические</option>
+          </select>
         </div>
-      ) : (
-        <div className="divide-y divide-stone-200 rounded-lg border border-stone-200 bg-white">
-          {flagged.map((s) => (
-            <div key={s.id} className="p-5 space-y-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="text-xs font-mono text-zinc-500">
-                    {s.id} · {s.category}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onOpenStory(s)}
-                    className="mt-0.5 text-left text-base font-semibold text-zinc-900 hover:text-rose-800 cursor-pointer"
-                  >
-                    {s.title}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onOpenStory(s)}
-                  className="rounded border border-stone-200 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-stone-50 cursor-pointer"
-                >
-                  Редактировать
-                </button>
+        <input
+          type="text"
+          value={testTitle}
+          onChange={(e) => setTestTitle(e.target.value)}
+          placeholder="Короткий заголовок идеи (напр., «Парень не купил подарок на годовщину»)"
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+        />
+        <textarea
+          rows={3}
+          value={testPlot}
+          onChange={(e) => setTestPlot(e.target.value)}
+          placeholder="Опишите суть конфликта или сцены, участников и ключевую деталь..."
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+        />
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-slate-500">
+            Сравниваются стеммы слов, сюжетные биграммы, механика и семантический отпечаток.
+          </span>
+          <button
+            type="submit"
+            disabled={checking}
+            className="rounded-md bg-indigo-700 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+          >
+            {checking ? 'Проверка...' : 'Проверить сходство'}
+          </button>
+        </div>
+
+        {testMatches !== null && (
+          <div className="border-t border-slate-100 pt-3">
+            {testMatches.length === 0 ? (
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-800">
+                <ShieldCheck className="h-4 w-4" />
+                Похожих сюжетов не найдено — идея уникальна относительно текущих {stories.length}{' '}
+                записей.
               </div>
-              <div className="space-y-1.5">
-                {s.similarityMatches.map((m) => (
+            ) : (
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-amber-900">
+                  Обнаружены похожие записи ({testMatches.length}):
+                </div>
+                {testMatches.map((m) => (
                   <div
-                    key={`${s.id}-${m.storyId}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50/50 px-3 py-2 text-xs"
+                    key={m.matchedId}
+                    className="rounded border border-amber-200 bg-amber-50/60 p-3 text-xs"
                   >
-                    <div>
-                      <span className="font-mono font-semibold text-zinc-900">{m.storyId}</span>
-                      <span className="mx-2 text-zinc-400">·</span>
-                      <span className="text-zinc-800">{m.title}</span>
-                      <span className="ml-2 font-mono font-semibold text-amber-800 tabular-nums">
-                        {m.score}%
+                    <div className="flex items-center justify-between gap-2 font-semibold text-slate-900">
+                      <span>
+                        <span className="font-mono">{m.matchedId}</span> · {m.matchedTitle}
                       </span>
-                      <div className="text-zinc-500">{m.reason}</div>
+                      <span className="font-mono text-amber-800 tabular-nums">
+                        {m.similarityScore}%
+                      </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onMergeStories({
-                          targetStoryId: m.storyId,
-                          nuanceToAppend: s.unexpectedNuance || s.shortDescription,
-                        })
-                      }
-                      className="inline-flex items-center gap-1 rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-800 hover:bg-stone-100 cursor-pointer"
-                    >
-                      <GitMerge className="h-3.5 w-3.5" />
-                      Слить нюанс в {m.storyId}
-                    </button>
+                    <p className="mt-1 text-slate-600">{m.matchedShortDescription}</p>
+                    <p className="mt-1 text-amber-900">{m.reason}</p>
                   </div>
                 ))}
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ============================================================================
-// 5. QUALITY SECTION
-// ============================================================================
-
-export const QualitySection: React.FC<{
-  stories: StoryPlot[];
-  minQualityScore: number;
-  onOpenStory: (story: StoryPlot) => void;
-}> = ({ stories, minQualityScore, onOpenStory }) => {
-  const { excellent, good, needsWork } = useMemo(() => {
-    const sorted = [...stories].sort((a, b) => (a.quality?.overall ?? 0) - (b.quality?.overall ?? 0));
-    return {
-      excellent: sorted.filter((s) => (s.quality?.overall ?? 0) >= 90),
-      good: sorted.filter(
-        (s) => (s.quality?.overall ?? 0) >= minQualityScore && (s.quality?.overall ?? 0) < 90
-      ),
-      needsWork: sorted.filter((s) => (s.quality?.overall ?? 0) < minQualityScore),
-    };
-  }, [stories, minQualityScore]);
-
-  return (
-    <div className="space-y-6">
-      <div className="border-b border-stone-200 pb-4">
-        <h2 className="text-xl font-semibold text-zinc-900">Контроль редакционного качества</h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          Целевой порог базы: <span className="font-mono tabular-nums">{minQualityScore}/100</span>.
-          Оцениваются конкретика, жизненная достоверность, глубина мотивации и потенциал дискуссии.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-lg border border-stone-200 bg-white p-5">
-          <div className="text-xs text-zinc-500">Высокий уровень (90+)</div>
-          <div className="mt-1 font-mono text-2xl font-semibold text-teal-800 tabular-nums">
-            {excellent.length}
+            )}
           </div>
-        </div>
-        <div className="rounded-lg border border-stone-200 bg-white p-5">
-          <div className="text-xs text-zinc-500">В норме ({minQualityScore}–89)</div>
-          <div className="mt-1 font-mono text-2xl font-semibold text-zinc-900 tabular-nums">
-            {good.length}
-          </div>
-        </div>
-        <div className="rounded-lg border border-stone-200 bg-white p-5">
-          <div className="text-xs text-zinc-500">Ниже порога (&lt; {minQualityScore})</div>
-          <div className="mt-1 font-mono text-2xl font-semibold text-amber-700 tabular-nums">
-            {needsWork.length}
-          </div>
-        </div>
-      </div>
+        )}
+      </form>
 
-      <div className="rounded-lg border border-stone-200 bg-white">
-        <div className="border-b border-stone-200 px-5 py-3.5">
-          <h3 className="text-sm font-semibold text-zinc-900">
-            Сюжеты, требующие внимания или усиления детали ({needsWork.length})
-          </h3>
-        </div>
-        {needsWork.length === 0 ? (
-          <div className="px-5 py-8 text-center text-xs text-zinc-500">
-            Все сюжеты в базе проходят минимальный порог качества {minQualityScore}/100.
+      {/* Flagged overlaps inside existing DB */}
+      <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <h2 className="text-base font-semibold text-slate-900">
+          Потенциальные пересечения в текущей базе ({flaggedStories.length})
+        </h2>
+        {flaggedStories.length === 0 ? (
+          <div className="mt-3 flex items-center gap-2 text-sm text-emerald-800">
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            <span>
+              Все {stories.length} сюжетов прошли проверку при пороге {threshold}% — дубли не
+              обнаружены.
+            </span>
           </div>
         ) : (
-          <div className="divide-y divide-stone-200">
-            {needsWork.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => onOpenStory(s)}
-                className="flex w-full items-center justify-between gap-4 px-5 py-3.5 text-left hover:bg-stone-50 cursor-pointer"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-mono text-zinc-500">
-                    {s.id} · {s.category} · {s.verificationStatus}
+          <div className="mt-3 divide-y divide-slate-200">
+            {flaggedStories.map((s) => (
+              <div key={s.id} className="py-3.5 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => onSelectStory(s)}
+                    className="text-left text-sm font-semibold text-slate-900 hover:text-indigo-700"
+                  >
+                    <span className="font-mono text-xs text-slate-500 mr-2">{s.id}</span>
+                    {s.title}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectStory(s)}
+                    className="rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Разобрать / объединить
+                  </button>
+                </div>
+                {s.similarityMatches?.map((m) => (
+                  <div
+                    key={m.matchedId}
+                    className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50/50 px-3 py-2 text-xs text-amber-950"
+                  >
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" />
+                    <div>
+                      <strong>
+                        Совпадение {m.similarityScore}% с {m.matchedId} («{m.matchedTitle}»):
+                      </strong>{' '}
+                      {m.reason}
+                    </div>
                   </div>
-                  <div className="font-medium text-sm text-zinc-900">{s.title}</div>
-                  <div className="text-xs text-zinc-500 truncate">{s.quality?.editorialNote}</div>
-                </div>
-                <div className="font-mono text-sm font-semibold text-amber-800 tabular-nums">
-                  {s.quality?.overall ?? 0}/100
-                </div>
-              </button>
+                ))}
+              </div>
             ))}
           </div>
         )}
@@ -731,276 +718,412 @@ export const QualitySection: React.FC<{
   );
 };
 
-// ============================================================================
-// 6. EXPORT & BACKUP SECTION
-// ============================================================================
+/* ============================================================================
+   5. КАЧЕСТВО ИДЕЙ (QUALITY AUDIT)
+   ============================================================================ */
+export const QualitySection: React.FC<{
+  stories: StoryPlot[];
+  minScore: number;
+  onSelectStory: (story: StoryPlot) => void;
+  onQuickStatus: (id: string, status: VerificationStatus) => Promise<void>;
+}> = ({ stories, minScore, onSelectStory, onQuickStatus }) => {
+  const queue = useMemo(
+    () =>
+      stories
+        .filter((s) => s.verificationStatus === 'pending' || s.verificationStatus === 'needs_revision')
+        .sort((a, b) => a.quality.overall - b.quality.overall),
+    [stories]
+  );
 
+  const distribution = useMemo(() => {
+    const active = stories.filter((s) => s.verificationStatus !== 'rejected');
+    return {
+      high: active.filter((s) => s.quality.overall >= 90).length,
+      good: active.filter((s) => s.quality.overall >= 80 && s.quality.overall < 90).length,
+      medium: active.filter((s) => s.quality.overall >= minScore && s.quality.overall < 80).length,
+      weak: active.filter((s) => s.quality.overall < minScore).length,
+    };
+  }, [stories, minScore]);
+
+  return (
+    <div className="space-y-6">
+      <div className="border-b border-slate-200 pb-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          Контроль качества сюжетных основ
+        </h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Критическая оценка по шкале 0–100: оригинальность, жизненность, конкретность,
+          вариативность и специфические метрики каждой коллекции (порог одобрения: {minScore}).
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiBox label="Отличные (90–100)" value={distribution.high} sub="Эталонные сюжеты" />
+        <KpiBox label="Сильные (80–89)" value={distribution.good} sub="Готовы к работе" />
+        <KpiBox
+          label={`Рабочие (${minScore}–79)`}
+          value={distribution.medium}
+          sub="Допустимы, можно усилить"
+        />
+        <KpiBox
+          label={`Ниже порога (<${minScore})`}
+          value={distribution.weak}
+          sub="На доработку или отклонение"
+        />
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h2 className="text-base font-semibold text-slate-900">
+            Очередь редакторской проверки ({queue.length})
+          </h2>
+          <span className="text-xs text-slate-500">Сначала слабые оценки</span>
+        </div>
+
+        {queue.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-600">
+            Все текущие сюжеты в базе проверены. Запустите следующую партию, чтобы пополнить
+            очередь.
+          </p>
+        ) : (
+          <div className="mt-2 divide-y divide-slate-200">
+            {queue.map((s) => (
+              <div
+                key={s.id}
+                className="flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <span className="font-mono text-slate-700">{s.id}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{s.collection === 'debate' ? 'Кто здесь прав?' : 'Романтическая'}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{s.category}</span>
+                    <span aria-hidden="true">·</span>
+                    <span
+                      className={
+                        s.verificationStatus === 'needs_revision'
+                          ? 'font-medium text-amber-700'
+                          : 'text-slate-600'
+                      }
+                    >
+                      {s.verificationStatus === 'needs_revision'
+                        ? 'На доработке'
+                        : 'Ожидает проверки'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onSelectStory(s)}
+                    className="mt-1 text-left text-sm font-semibold text-slate-900 hover:text-indigo-700"
+                  >
+                    {s.title}
+                  </button>
+                  <p className="mt-0.5 text-xs text-slate-600">{s.quality.editorialNote}</p>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="font-mono text-base font-bold text-slate-900 tabular-nums">
+                    {s.quality.overall}/100
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onQuickStatus(s.id, 'approved')}
+                    className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    Принять
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectStory(s)}
+                    className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Доработать
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onQuickStatus(s.id, 'rejected')}
+                    className="rounded border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                  >
+                    Отклонить
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ============================================================================
+   6. ЭКСПОРТ БАЗЫ, БЭКАПЫ И SUPABASE-СХЕМА (EXPORT)
+   ============================================================================ */
 export const ExportSection: React.FC<{
-  backups: BackupEntry[];
+  stats: DatabaseStats;
+  backups: BackupSnapshotInfo[];
   onCreateBackup: () => Promise<void>;
   onRestoreBackup: (filename: string) => Promise<void>;
-  onImportJson: (stories: Partial<StoryPlot>[]) => Promise<{ imported: number; skippedDuplicates: number }>;
-}> = ({ backups, onCreateBackup, onRestoreBackup, onImportJson }) => {
-  const [exportCol, setExportCol] = useState('all');
-  const [exportStatus, setExportStatus] = useState('all');
-  const [busy, setBusy] = useState(false);
+  onImported: () => Promise<void>;
+}> = ({ stats, backups, onCreateBackup, onRestoreBackup, onImported }) => {
+  const [exportCollection, setExportCollection] = useState<'all' | 'debate' | 'romantic'>('all');
+  const [onlyApproved, setOnlyApproved] = useState(false);
+  const [creatingBackup, setCreatingBackup] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
-  const [importMessage, setImportMessage] = useState<string | null>(null);
-  const [archiveMessage, setArchiveMessage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleDownloadZip = async (url: string, filename: string) => {
-    setBusy(true);
-    setArchiveMessage(null);
-    try {
-      const blob = await downloadZipArchiveBlob(url);
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(blobUrl);
-      setArchiveMessage(`Архив ${filename} скачан и проверен (${Math.round(blob.size / 1024)} КБ).`);
-    } catch (err) {
-      setArchiveMessage(err instanceof Error ? err.message : 'Ошибка скачивания архива');
-    } finally {
-      setBusy(false);
-    }
+  const buildQuery = () => {
+    const p = new URLSearchParams();
+    if (exportCollection !== 'all') p.set('collection', exportCollection);
+    if (onlyApproved) p.set('onlyApproved', 'true');
+    const qs = p.toString();
+    return qs ? `?${qs}` : '';
   };
 
-  const handleCopySql = async () => {
-    await navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
-    setCopiedSql(true);
-    setTimeout(() => setCopiedSql(false), 2000);
+  const handleBackupNow = async () => {
+    setCreatingBackup(true);
+    try {
+      await onCreateBackup();
+    } finally {
+      setCreatingBackup(false);
+    }
   };
 
   const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setBusy(true);
-    setImportMessage(null);
+    setImportStatus(null);
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
-      const list = Array.isArray(parsed?.stories) ? parsed.stories : Array.isArray(parsed) ? parsed : null;
-      if (!list) throw new Error('Файл должен содержать массив stories');
-      const res = await onImportJson(list);
-      setImportMessage(
-        `Импортировано сюжетов: ${res.imported}. Пропущено дублей: ${res.skippedDuplicates}.`
+      const list = Array.isArray(parsed) ? parsed : parsed.stories;
+      if (!Array.isArray(list)) {
+        setImportStatus('Ошибка: файл должен содержать массив stories.');
+        return;
+      }
+      const res = await api.importJsonStories(list, true);
+      setImportStatus(
+        `Импортировано: ${res.importedCount} сюжетов. Пропущено дублей: ${res.skippedDuplicatesCount}.`
       );
+      await onImported();
     } catch (err) {
-      setImportMessage(err instanceof Error ? err.message : 'Ошибка чтения JSON');
-    } finally {
-      setBusy(false);
-      e.target.value = '';
+      setImportStatus(`Ошибка импорта: ${(err as Error).message}`);
     }
+  };
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 2000);
   };
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-stone-200 pb-4">
-        <h2 className="text-xl font-semibold text-zinc-900">Экспорт, резервные копии и миграция</h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          Выгрузка базы сюжетов, импорт JSON, ротируемые снимки данных и полный исходный код
-          проекта в ZIP.
+      <div className="border-b border-slate-200 pb-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          Экспорт, резервное копирование и подготовка к Supabase
+        </h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Все данные сохраняются локально на диске сервера (UTF-8) без ложного ощущения облачной
+          синхронизации. Готово к прямому импорту в Supabase PostgreSQL.
         </p>
       </div>
 
-      {/* Export stories */}
-      <div className="rounded-lg border border-stone-200 bg-white p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-zinc-900">Экспорт базы сюжетов (JSON и CSV)</h3>
+      {/* Full GitHub Project + DB Archive */}
+      <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-5 space-y-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="flex items-center gap-2 text-indigo-800">
+              <Archive className="h-4 w-4 shrink-0" />
+              <h2 className="text-base font-semibold text-slate-900">
+                Полный архив этапа 1 для переноса на GitHub (.zip)
+              </h2>
+            </div>
+            <p className="text-xs leading-relaxed text-slate-700">
+              Архив содержит весь исходный код (<code>src/</code>, <code>server/</code>,{' '}
+              <code>server.ts</code>, конфигурации), текущую базу сюжетов{' '}
+              <code>data/melo_love_db.json</code> ({stats.total} записей), <code>README.md</code>{' '}
+              и документацию <code>MELO_LOVE_SUMMARY.txt</code>. Лишние папки (
+              <code>node_modules</code>, <code>dist</code>, <code>.env</code>, временные снимки)
+              исключены по <code>.gitignore</code>.
+            </p>
+          </div>
+          <a
+            href="/api/export/archive"
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-700 px-4 py-2.5 text-xs font-semibold text-white hover:bg-indigo-800 shrink-0"
+          >
+            <Download className="h-4 w-4" />
+            Скачать архив этапа 1 (.zip)
+          </a>
+        </div>
+
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label className="block text-xs font-medium text-zinc-700">
-            Раздел
-            <select
-              value={exportCol}
-              onChange={(e) => setExportCol(e.target.value)}
-              className="mt-1 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="all">Вся база (Споры + Романтика)</option>
-              <option value="debate">Только «Споры и мнения»</option>
-              <option value="romantic">Только «Романтические истории»</option>
-            </select>
-          </label>
-          <label className="block text-xs font-medium text-zinc-700">
-            Статус проверки
-            <select
-              value={exportStatus}
-              onChange={(e) => setExportStatus(e.target.value)}
-              className="mt-1 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="all">Все статусы</option>
-              <option value="approved">Только подтверждённые</option>
-              <option value="pending">Только ожидающие</option>
-              <option value="needs_revision">На доработке</option>
-            </select>
+          <div className="rounded-md border border-slate-200 bg-white p-3.5 text-xs text-slate-700 space-y-1.5">
+            <div className="font-semibold text-slate-900">
+              Через браузер на GitHub (без консоли и bash)
+            </div>
+            <ol className="list-decimal pl-4 space-y-1 leading-relaxed text-slate-700">
+              <li>Распакуйте скачанный <code>.zip</code> в отдельную папку на компьютере.</li>
+              <li>
+                На <strong>github.com</strong> создайте новый пустой репозиторий (без галочки README)
+                и нажмите ссылку <strong>uploading an existing file</strong> (или{' '}
+                <em>Add file → Upload files</em>).
+              </li>
+              <li>
+                Выделите всё содержимое папки (включая скрытые файлы <code>.gitignore</code> и{' '}
+                <code>.env.example</code>) и перетащите в окно браузера — в архиве всего 28 файлов,
+                поэтому всё загрузится за один раз.
+              </li>
+              <li>Нажмите зелёную кнопку <strong>Commit changes</strong>.</li>
+            </ol>
+          </div>
+
+          <div className="rounded-md border border-slate-200 bg-white p-3.5 text-xs text-slate-700 space-y-1.5">
+            <div className="font-semibold text-slate-900">
+              Через терминал / Git (альтернатива):
+            </div>
+            <pre className="overflow-x-auto font-mono text-[11px] leading-relaxed text-slate-800">
+{`git init
+git add .
+git commit -m "Stage 1: MELO_LOVE initial base"
+git branch -M main
+git remote add origin https://github.com/<ПРОФИЛЬ>/melo-love.git
+git push -u origin main`}
+            </pre>
+          </div>
+        </div>
+      </div>
+
+      {/* Export Controls */}
+      <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
+        <h2 className="text-base font-semibold text-slate-900">Выгрузка базы (UTF-8)</h2>
+        <div className="flex flex-wrap items-center gap-4">
+          <select
+            value={exportCollection}
+            onChange={(e) => setExportCollection(e.target.value as 'all' | 'debate' | 'romantic')}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+          >
+            <option value="all">Обе коллекции ({stats.total})</option>
+            <option value="debate">Только «Кто здесь прав?» ({stats.debateTotal})</option>
+            <option value="romantic">Только «Романтические истории» ({stats.romanticTotal})</option>
+          </select>
+
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={onlyApproved}
+              onChange={(e) => setOnlyApproved(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-indigo-700"
+            />
+            <span>Только проверенные и принятые ({stats.approved})</span>
           </label>
         </div>
+
         <div className="flex flex-wrap items-center gap-3">
           <a
-            href={getExportJsonUrl(exportCol, exportStatus)}
-            download="melo_love_stories.json"
-            className="inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-3.5 py-2 text-xs font-medium text-white hover:bg-zinc-800"
+            href={`/api/export/json${buildQuery()}`}
+            className="inline-flex items-center gap-2 rounded-md bg-indigo-700 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-800"
           >
             <Download className="h-3.5 w-3.5" />
-            Скачать JSON
+            Скачать JSON (структура 26 полей)
           </a>
           <a
-            href={getExportCsvUrl(exportCol, exportStatus)}
-            download="melo_love_stories.csv"
-            className="inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-zinc-800 hover:bg-stone-50"
+            href={`/api/export/csv${buildQuery()}`}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
           >
             <Download className="h-3.5 w-3.5" />
-            Скачать CSV (UTF-8 BOM для Excel)
+            Скачать CSV (UTF-8 BOM для Supabase / Excel)
           </a>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json,application/json"
-            onChange={handleFileImport}
-            className="hidden"
-          />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-zinc-800 hover:bg-stone-50 cursor-pointer"
-          >
-            <Upload className="h-3.5 w-3.5" />
-            Импортировать JSON в базу
-          </button>
         </div>
-        {importMessage && (
-          <div className="rounded border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-zinc-800">
-            {importMessage}
-          </div>
-        )}
       </div>
 
-      {/* Full project archive */}
-      <div className="rounded-lg border border-stone-200 bg-white p-5 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-zinc-900">
-              Архив проекта и пакет обновлённых файлов для переноса на GitHub
-            </h3>
-            <p className="mt-0.5 text-xs text-zinc-600">
-              Содержит сервер, клиент, тесты, конфигурацию и актуальную базу `data/*.json` без
-              временных файлов и секретов. Перед загрузкой проверяется целостность ZIP-заголовка.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+      {/* Backups & Import */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-slate-900">Локальные снимки на диске</h2>
             <button
               type="button"
-              disabled={busy}
-              onClick={() => handleDownloadZip(getPatchArchiveUrl(), 'melo_love_ai_patch.zip')}
-              className="inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-zinc-800 hover:bg-stone-50 whitespace-nowrap cursor-pointer disabled:opacity-50"
+              onClick={handleBackupNow}
+              disabled={creatingBackup}
+              className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
             >
-              <Archive className="h-3.5 w-3.5" />
-              Только обновлённые файлы (.zip)
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => handleDownloadZip(getProjectArchiveUrl(), 'melo_love_project.zip')}
-              className="inline-flex items-center gap-1.5 rounded-md bg-rose-800 px-3.5 py-2 text-xs font-medium text-white hover:bg-rose-900 whitespace-nowrap cursor-pointer disabled:opacity-50"
-            >
-              <Archive className="h-3.5 w-3.5" />
-              Скачать весь проект (.zip)
+              <Database className="h-3.5 w-3.5" />
+              {creatingBackup ? 'Создание...' : 'Создать снимок сейчас'}
             </button>
           </div>
-        </div>
-        {archiveMessage && (
-          <div className="rounded border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-zinc-800">
-            {archiveMessage}
-          </div>
-        )}
-        <p className="text-xs text-zinc-500">
-          После распаковки архива откройте репозиторий на GitHub, выберите «Add file → Upload
-          files» и перетащите папки проекта в окно браузера, либо выполните `git init && git push`.
-        </p>
-      </div>
-
-      {/* Backups */}
-      <div className="rounded-lg border border-stone-200 bg-white p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-zinc-900">Резервные снимки на сервере</h3>
-            <p className="text-xs text-zinc-500">
-              До 15 последних снимков в `data/backups/` перед коммитом партий или вручную.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await onCreateBackup();
-              } finally {
-                setBusy(false);
-              }
-            }}
-            className="inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 hover:bg-stone-50 cursor-pointer"
-          >
-            <Database className="h-3.5 w-3.5" />
-            Создать снимок сейчас
-          </button>
-        </div>
-
-        <div className="divide-y divide-stone-200 rounded border border-stone-200">
-          {backups.length === 0 ? (
-            <div className="px-4 py-6 text-center text-xs text-zinc-500">
-              Резервных снимков пока нет
-            </div>
-          ) : (
-            backups.map((b) => (
-              <div
-                key={b.filename}
-                className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs"
-              >
-                <div className="font-mono text-zinc-800">
-                  {b.filename} · {b.storyCount} сюжетов · {Math.round(b.sizeBytes / 1024)} КБ
+          <div className="divide-y divide-slate-100">
+            {backups.length === 0 ? (
+              <p className="py-3 text-xs text-slate-500">
+                Снимки создаются автоматически при сохранении партий или вручную по кнопке выше.
+              </p>
+            ) : (
+              backups.map((b) => (
+                <div key={b.filename} className="flex items-center justify-between gap-2 py-2.5 text-xs">
+                  <div className="min-w-0">
+                    <div className="truncate font-mono text-slate-800">{b.filename}</div>
+                    <div className="text-slate-500 tabular-nums">
+                      {(b.sizeBytes / 1024).toFixed(1)} КБ ·{' '}
+                      {new Date(b.createdAt).toLocaleString('ru-RU')}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onRestoreBackup(b.filename)}
+                    className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50 shrink-0"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Восстановить
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onRestoreBackup(b.filename)}
-                  className="inline-flex items-center gap-1 rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-stone-100 cursor-pointer"
-                >
-                  <RotateCcw className="h-3 w-3" />
-                  Восстановить
-                </button>
-              </div>
-            ))
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
+          <h2 className="text-base font-semibold text-slate-900">Импорт JSON в базу</h2>
+          <p className="text-xs leading-relaxed text-slate-600">
+            Загрузите ранее экспортированный JSON-файл. При импорте каждая запись проходит проверку
+            смысловых дублей — повторяющиеся сюжеты будут автоматически пропущены.
+          </p>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-800 hover:bg-slate-50">
+            <Upload className="h-3.5 w-3.5" />
+            Выбрать JSON-файл для импорта
+            <input type="file" accept=".json,application/json" onChange={handleFileImport} className="hidden" />
+          </label>
+          {importStatus && (
+            <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
+              {importStatus}
+            </div>
           )}
         </div>
       </div>
 
       {/* Supabase SQL Schema */}
-      <div className="rounded-lg border border-stone-200 bg-white p-5 space-y-3">
+      <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-zinc-900">
-              SQL-схема для будущей миграции в Supabase / PostgreSQL
-            </h3>
-            <p className="text-xs text-zinc-500">
-              Готовый DDL таблицы `public.melo_story_plots` (в текущей версии используется локальное
-              дисковое хранилище).
+            <h2 className="text-base font-semibold text-slate-900">
+              SQL-схема для будущего подключения Supabase
+            </h2>
+            <p className="text-xs text-slate-500">
+              Таблица PostgreSQL полностью соответствует 26 полям сюжетной основы и индексирована по
+              семантическим отпечаткам.
             </p>
           </div>
           <button
             type="button"
             onClick={handleCopySql}
-            className="inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 hover:bg-stone-50 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
-            {copiedSql ? <Check className="h-3.5 w-3.5 text-teal-700" /> : <Copy className="h-3.5 w-3.5" />}
-            {copiedSql ? 'Скопировано' : 'Скопировать SQL'}
+            <Copy className="h-3.5 w-3.5" />
+            {copiedSql ? 'Скопировано' : 'Копировать SQL'}
           </button>
         </div>
-        <pre className="max-h-60 overflow-auto rounded border border-stone-200 bg-stone-50 p-3 font-mono text-[11px] leading-relaxed text-zinc-800">
+        <pre className="max-h-64 overflow-auto rounded-md border border-slate-200 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200">
           {SUPABASE_SQL_SCHEMA}
         </pre>
       </div>
@@ -1008,44 +1131,24 @@ export const ExportSection: React.FC<{
   );
 };
 
-// ============================================================================
-// 7. SETTINGS SECTION
-// ============================================================================
-
+/* ============================================================================
+   7. НАСТРОЙКИ (SETTINGS)
+   ============================================================================ */
 export const SettingsSection: React.FC<{
   settings: AppSettings;
-  onSaveSettings: (updates: Partial<AppSettings>) => Promise<void>;
+  onSaveSettings: (next: Partial<AppSettings>) => Promise<void>;
 }> = ({ settings, onSaveSettings }) => {
-  const [form, setForm] = useState<AppSettings>({ ...settings });
+  const [form, setForm] = useState<AppSettings>(settings);
   const [saving, setSaving] = useState(false);
-  const [savedNotice, setSavedNotice] = useState(false);
-  const [integrations, setIntegrations] = useState<TelegramIntegrationStatus | null>(null);
-  const [checkingEnv, setCheckingEnv] = useState(false);
-
-  const loadEnvStatus = async () => {
-    setCheckingEnv(true);
-    try {
-      const status = await fetchIntegrationStatus();
-      setIntegrations(status);
-    } catch {
-      // Non-blocking
-    } finally {
-      setCheckingEnv(false);
-    }
-  };
-
-  useEffect(() => {
-    loadEnvStatus();
-  }, []);
+  const [savedOk, setSavedOk] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    setSavedNotice(false);
+    setSavedOk(false);
     try {
       await onSaveSettings(form);
-      setSavedNotice(true);
-      setTimeout(() => setSavedNotice(false), 2500);
+      setSavedOk(true);
     } finally {
       setSaving(false);
     }
@@ -1053,201 +1156,186 @@ export const SettingsSection: React.FC<{
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-stone-200 pb-4">
-        <h2 className="text-xl font-semibold text-zinc-900">Настройки базы и порогов</h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          Текущий режим хранения: локальное файловое хранилище сервера (`data/*.json` с атомарной
-          записью и ротацией бэкапов).
+      <div className="border-b border-slate-200 pb-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          Настройки генератора и хранилища
+        </h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Параметры объёма библиотеки, размера партий, порога уникальности и локальной сохранности
+          данных.
         </p>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="rounded-lg border border-stone-200 bg-white p-6 space-y-5 max-w-2xl"
+        className="max-w-3xl rounded-lg border border-slate-200 bg-white p-6 space-y-5"
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <label className="block text-xs font-medium text-zinc-700">
-            Целевой объём базы
+          <div>
+            <label className="block text-xs font-medium text-slate-700">
+              Общая цель библиотеки
+            </label>
             <input
               type="number"
               min={100}
-              max={10000}
-              value={form.targetTotal}
-              onChange={(e) => setForm({ ...form, targetTotal: Number(e.target.value) || 3000 })}
-              className="mt-1 w-full rounded-md border border-stone-200 px-3 py-2 font-mono text-sm tabular-nums"
+              value={form.targetTotalStories}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, targetTotalStories: Number(e.target.value) || 3000 }))
+              }
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm tabular-nums"
             />
-          </label>
-          <label className="block text-xs font-medium text-zinc-700">
-            Цель · Споры
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700">
+              Цель «Кто здесь прав?»
+            </label>
             <input
               type="number"
               min={50}
-              max={5000}
-              value={form.targetDebate}
-              onChange={(e) => setForm({ ...form, targetDebate: Number(e.target.value) || 1500 })}
-              className="mt-1 w-full rounded-md border border-stone-200 px-3 py-2 font-mono text-sm tabular-nums"
+              value={form.targetDebateStories}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, targetDebateStories: Number(e.target.value) || 1500 }))
+              }
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm tabular-nums"
             />
-          </label>
-          <label className="block text-xs font-medium text-zinc-700">
-            Цель · Романтика
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700">
+              Цель «Романтические»
+            </label>
             <input
               type="number"
               min={50}
-              max={5000}
-              value={form.targetRomantic}
-              onChange={(e) => setForm({ ...form, targetRomantic: Number(e.target.value) || 1500 })}
-              className="mt-1 w-full rounded-md border border-stone-200 px-3 py-2 font-mono text-sm tabular-nums"
+              value={form.targetRomanticStories}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, targetRomanticStories: Number(e.target.value) || 1500 }))
+              }
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm tabular-nums"
             />
-          </label>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <label className="block text-xs font-medium text-zinc-700">
-            Порог дублей (%)
+          <div>
+            <label className="block text-xs font-medium text-slate-700">
+              Размер партии по умолчанию
+            </label>
+            <input
+              type="number"
+              min={5}
+              max={50}
+              value={form.defaultBatchSize}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, defaultBatchSize: Number(e.target.value) || 25 }))
+              }
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm tabular-nums"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700">
+              Порог дубля (% сходства)
+            </label>
             <input
               type="number"
               min={20}
-              max={90}
+              max={85}
               value={form.similarityThreshold}
               onChange={(e) =>
-                setForm({ ...form, similarityThreshold: Number(e.target.value) || 38 })
+                setForm((p) => ({ ...p, similarityThreshold: Number(e.target.value) || 38 }))
               }
-              className="mt-1 w-full rounded-md border border-stone-200 px-3 py-2 font-mono text-sm tabular-nums"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm tabular-nums"
             />
-          </label>
-          <label className="block text-xs font-medium text-zinc-700">
-            Мин. балл качества
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700">
+              Мин. балл качества
+            </label>
             <input
               type="number"
-              min={50}
-              max={98}
-              value={form.minQualityScore}
-              onChange={(e) => setForm({ ...form, minQualityScore: Number(e.target.value) || 75 })}
-              className="mt-1 w-full rounded-md border border-stone-200 px-3 py-2 font-mono text-sm tabular-nums"
-            />
-          </label>
-          <label className="block text-xs font-medium text-zinc-700">
-            Размер партии по умолч.
-            <select
-              value={form.defaultBatchSize}
+              min={40}
+              max={95}
+              value={form.minimumApprovalScore}
               onChange={(e) =>
-                setForm({
-                  ...form,
-                  defaultBatchSize: Number(e.target.value) as AppSettings['defaultBatchSize'],
-                })
+                setForm((p) => ({ ...p, minimumApprovalScore: Number(e.target.value) || 72 }))
               }
-              className="mt-1 w-full rounded-md border border-stone-200 bg-white px-3 py-2 font-mono text-sm"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={35}>35</option>
-              <option value={50}>50</option>
-            </select>
-          </label>
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm tabular-nums"
+            />
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 pt-2">
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700 space-y-1">
+          <div className="font-semibold text-slate-900">Режим хранения данных</div>
+          <p>
+            Текущее хранилище: <strong>Локальный серверный диск (data/melo_love_db.json)</strong> +
+            промежуточное сохранение проверяемых партий (data/pending_batch.json) и снимки в{' '}
+            <code>data/backups/</code>.
+          </p>
+          <p className="text-slate-500">
+            Подключение Supabase на данном этапе не активно: используйте раздел «Экспорт базы» для
+            переноса или резервирования.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
           <button
             type="submit"
             disabled={saving}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
+            className="rounded-md bg-indigo-700 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
           >
-            {saving ? 'Сохраняем...' : 'Сохранить настройки'}
+            {saving ? 'Сохранение...' : 'Сохранить настройки'}
           </button>
-          {savedNotice && <span className="text-xs font-medium text-teal-800">Сохранено</span>}
+          {savedOk && <span className="text-xs font-medium text-emerald-700">Настройки сохранены.</span>}
         </div>
       </form>
-
-      {/* Optional External Integrations Status */}
-      <div className="rounded-lg border border-stone-200 bg-white p-6 space-y-4 max-w-2xl">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-zinc-900">
-              Внешние интеграции и ключи (необязательны для работы)
-            </h3>
-            <p className="mt-0.5 text-xs text-zinc-500">
-              Все ключи опциональны: приложение, база сюжетов, редакторы и экспорт полностью работают
-              на локальных файлах без внешних API. Подключите нужные ключи позже через серверный{' '}
-              <code>.env</code> или панель Secrets.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={checkingEnv}
-            onClick={loadEnvStatus}
-            className="inline-flex items-center gap-1.5 rounded border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 hover:bg-stone-50 cursor-pointer"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${checkingEnv ? 'animate-spin' : ''}`} />
-            Обновить статус
-          </button>
-        </div>
-
-        {integrations && (
-          <div className="divide-y divide-stone-200 rounded border border-stone-200 text-xs">
-            <div className="flex items-center justify-between gap-3 px-4 py-2.5">
-              <div>
-                <div className="font-medium text-zinc-900">
-                  Google Gemini + GigaChat + Z.ai (GEMINI_API_KEY / GIGACHAT_AUTH_KEY / ZAI_API_KEY)
-                </div>
-                <div className="text-zinc-500">
-                  Основной Gemini (gemini-4-hydrogen → gemini-3.1-flash-lite) с автопереключением на GigaChat и Z.ai (glm-4.7-flash) при сбое.
-                </div>
-              </div>
-              <span
-                className={`font-mono font-medium whitespace-nowrap ${
-                  integrations.hasGeminiConfigured ? 'text-teal-800' : 'text-zinc-600'
-                }`}
-              >
-                {integrations.hasGeminiConfigured
-                  ? [
-                      integrations.hasGeminiPrimaryConfigured ? 'Gemini' : '',
-                      integrations.hasGigaChatConfigured ? 'GigaChat' : '',
-                      integrations.hasZaiConfigured ? 'Z.ai' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' + ') || 'Подключён'
-                  : 'Не задан (опционально)'}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 px-4 py-2.5">
-              <div>
-                <div className="font-medium text-zinc-900">
-                  Telegram Bot API (TELEGRAM_BOT_TOKEN)
-                </div>
-                <div className="text-zinc-500">
-                  Нужен только при реальной отправке в канал. Dry-Run и редактор работают без него.
-                </div>
-              </div>
-              <span
-                className={`font-mono font-medium whitespace-nowrap ${
-                  integrations.hasBotTokenConfigured ? 'text-teal-800' : 'text-zinc-600'
-                }`}
-              >
-                {integrations.hasBotTokenConfigured ? 'Подключён' : 'Не задан (опционально)'}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 px-4 py-2.5">
-              <div>
-                <div className="font-medium text-zinc-900">
-                  Supabase (SUPABASE_URL + SERVICE_ROLE_KEY)
-                </div>
-                <div className="text-zinc-500">
-                  Нужен только при переносе данных в облако; сейчас используется локальный JSON.
-                </div>
-              </div>
-              <span
-                className={`font-mono font-medium whitespace-nowrap ${
-                  integrations.hasSupabaseConfigured ? 'text-teal-800' : 'text-zinc-600'
-                }`}
-              >
-                {integrations.hasSupabaseConfigured ? 'Подключена' : 'Не задана (локальный JSON)'}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 };
+
+/* ============================================================================
+   SHARED COMPACT COMPONENTS
+   ============================================================================ */
+const KpiBox: React.FC<{
+  label: string;
+  value: number;
+  sub: string;
+  onClick?: () => void;
+}> = ({ label, value, sub, onClick }) => {
+  const Wrapper = onClick ? 'button' : 'div';
+  return (
+    <Wrapper
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={`rounded-lg border border-slate-200 bg-white p-4 text-left ${
+        onClick ? 'transition-colors hover:border-indigo-300 hover:bg-slate-50/50' : ''
+      }`}
+    >
+      <div className="text-xs font-medium text-slate-500">{label}</div>
+      <div className="mt-1.5 font-mono text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
+        {value.toLocaleString('ru-RU')}
+      </div>
+      <div className="mt-1 text-xs text-slate-500">{sub}</div>
+    </Wrapper>
+  );
+};
+
+const ProgressBar: React.FC<{
+  label: string;
+  current: number;
+  target: number;
+  percent: number;
+}> = ({ label, current, target, percent }) => (
+  <div>
+    <div className="flex items-center justify-between text-xs">
+      <span className="font-medium text-slate-700">{label}</span>
+      <span className="font-mono text-slate-700 tabular-nums">
+        {current} / {target} ({percent}%)
+      </span>
+    </div>
+    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+      <div
+        className="h-full rounded-full bg-indigo-700 transition-all duration-300"
+        style={{ width: `${Math.max(1.5, Math.min(100, percent))}%` }}
+      />
+    </div>
+  </div>
+);

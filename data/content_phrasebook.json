@@ -1,132 +1,186 @@
 [
   {
-    "id": "PHR-0001",
-    "phrase": "на словах всё звучало складно",
-    "meaningNote": "Мягкий контраст между декларацией и бытовой реальностью",
-    "collectionScope": "debate",
-    "toneTag": "наблюдение",
-    "weight": 8,
+    "id": "pb-01",
+    "phrase": "И вот тут начинается самое интересное.",
+    "collections": [
+      "debate",
+      "romantic"
+    ],
+    "tone": "intrigued",
     "maxFrequencyPer10": 2,
+    "weight": 8,
+    "notes": "Подходит для перелома перед раскрытием неожиданного нюанса.",
     "banned": false,
+    "usageCount": 0,
     "recentUsageCount": 0,
-    "totalUsageCount": 4,
-    "createdAt": "2026-11-15T10:00:00.000Z"
+    "isOverused": false,
+    "isCustom": false,
+    "createdAt": "2026-11-20T23:51:05.127Z",
+    "updatedAt": "2026-11-20T23:51:05.127Z"
   },
   {
-    "id": "PHR-0002",
-    "phrase": "внутри уже щёлкнула та самая усталость",
-    "meaningNote": "Точка накопленного напряжения без мелодрамы",
-    "collectionScope": "both",
-    "toneTag": "эмоция",
+    "id": "pb-02",
+    "phrase": "А теперь внимание.",
+    "collections": [
+      "debate"
+    ],
+    "tone": "ironic",
+    "maxFrequencyPer10": 2,
     "weight": 7,
-    "maxFrequencyPer10": 2,
+    "notes": "Акцент на детали, меняющей расклад сторон.",
     "banned": false,
-    "recentUsageCount": 2,
-    "totalUsageCount": 2,
-    "createdAt": "2026-11-15T10:00:00.000Z"
-  },
-  {
-    "id": "PHR-0003",
-    "phrase": "мелочь, мимо которой легко пройти",
-    "meaningNote": "Фокус на маленькой говорящей детали",
-    "collectionScope": "romantic",
-    "toneTag": "деталь",
-    "weight": 9,
-    "maxFrequencyPer10": 2,
-    "banned": false,
+    "usageCount": 0,
     "recentUsageCount": 0,
-    "totalUsageCount": 4,
-    "createdAt": "2026-11-15T10:00:00.000Z"
+    "isOverused": false,
+    "isCustom": false,
+    "createdAt": "2026-11-20T23:51:05.127Z",
+    "updatedAt": "2026-11-20T23:51:05.127Z"
   },
   {
-    "id": "PHR-0004",
-    "phrase": "тут у каждого своя правда и свой счёт",
-    "meaningNote": "Переход к аргументации обеих сторон в дискуссии",
-    "collectionScope": "debate",
-    "toneTag": "баланс",
+    "id": "pb-03",
+    "phrase": "Красиво звучит, но есть нюанс.",
+    "collections": [
+      "debate"
+    ],
+    "tone": "skeptical",
+    "maxFrequencyPer10": 2,
     "weight": 8,
-    "maxFrequencyPer10": 2,
+    "notes": "Контраст между декларируемыми словами и реальностью.",
     "banned": false,
-    "recentUsageCount": 1,
-    "totalUsageCount": 4,
-    "createdAt": "2026-11-15T10:00:00.000Z"
+    "usageCount": 0,
+    "recentUsageCount": 0,
+    "isOverused": false,
+    "isCustom": false,
+    "createdAt": "2026-11-20T23:51:05.127Z",
+    "updatedAt": "2026-11-20T23:51:05.127Z"
   },
   {
-    "id": "PHR-0005",
-    "phrase": "без громких обещаний и лишних свидетелей",
-    "meaningNote": "Характеристика тихой взрослой заботы",
-    "collectionScope": "romantic",
-    "toneTag": "теплота",
-    "weight": 9,
+    "id": "pb-04",
+    "phrase": "Любопытная арифметика.",
+    "collections": [
+      "debate"
+    ],
+    "tone": "ironic",
     "maxFrequencyPer10": 2,
-    "banned": false,
-    "recentUsageCount": 1,
-    "totalUsageCount": 4,
-    "createdAt": "2026-11-15T10:00:00.000Z"
-  },
-  {
-    "id": "PHR-0006",
-    "phrase": "самое неприятное началось уже потом",
-    "meaningNote": "Поворот от бытового эпизода к его последствиям",
-    "collectionScope": "debate",
-    "toneTag": "динамика",
     "weight": 7,
-    "maxFrequencyPer10": 2,
+    "notes": "Хорошо работает в спорах о бюджете, быте и распределении усилий.",
     "banned": false,
-    "recentUsageCount": 2,
-    "totalUsageCount": 2,
-    "createdAt": "2026-11-15T10:00:00.000Z"
+    "usageCount": 0,
+    "recentUsageCount": 0,
+    "isOverused": false,
+    "isCustom": false,
+    "createdAt": "2026-11-20T23:51:05.127Z",
+    "updatedAt": "2026-11-20T23:51:05.127Z"
   },
   {
-    "id": "PHR-0007",
-    "phrase": "в такие вечера дом проверяется на прочность",
-    "meaningNote": "Наблюдение про совместный быт и поддержку",
-    "collectionScope": "both",
-    "toneTag": "атмосфера",
-    "weight": 8,
+    "id": "pb-05",
+    "phrase": "Вот такой романтический сюрприз.",
+    "collections": [
+      "debate",
+      "romantic"
+    ],
+    "tone": "ironic",
     "maxFrequencyPer10": 1,
-    "banned": false,
-    "recentUsageCount": 1,
-    "totalUsageCount": 1,
-    "createdAt": "2026-11-15T10:00:00.000Z"
-  },
-  {
-    "id": "PHR-0008",
-    "phrase": "казалось бы, сущая ерунда",
-    "meaningNote": "Снижение пафоса перед важной деталью",
-    "collectionScope": "both",
-    "toneTag": "разговорный",
-    "weight": 7,
-    "maxFrequencyPer10": 2,
-    "banned": false,
-    "recentUsageCount": 2,
-    "totalUsageCount": 2,
-    "createdAt": "2026-11-15T10:00:00.000Z"
-  },
-  {
-    "id": "PHR-0009",
-    "phrase": "именно в эту секунду стало всё понятно",
-    "meaningNote": "Фиксация тихого инсайта героя",
-    "collectionScope": "romantic",
-    "toneTag": "поворот",
-    "weight": 7,
-    "maxFrequencyPer10": 1,
-    "banned": false,
-    "recentUsageCount": 1,
-    "totalUsageCount": 1,
-    "createdAt": "2026-11-15T10:00:00.000Z"
-  },
-  {
-    "id": "PHR-0010",
-    "phrase": "спорить здесь можно долго, но факт остаётся фактом",
-    "meaningNote": "Подводка к триггерному вопросу в финале",
-    "collectionScope": "debate",
-    "toneTag": "финал",
     "weight": 6,
-    "maxFrequencyPer10": 2,
+    "notes": "Использовать аккуратно — уместно для неловкой или двойственной сцены.",
     "banned": false,
+    "usageCount": 0,
     "recentUsageCount": 0,
-    "totalUsageCount": 0,
-    "createdAt": "2026-11-15T10:00:00.000Z"
+    "isOverused": false,
+    "isCustom": false,
+    "createdAt": "2026-11-20T23:51:05.127Z",
+    "updatedAt": "2026-11-20T23:51:05.127Z"
+  },
+  {
+    "id": "pb-06",
+    "phrase": "И вроде мелочь, а осадочек остался.",
+    "collections": [
+      "debate"
+    ],
+    "tone": "observational",
+    "maxFrequencyPer10": 2,
+    "weight": 8,
+    "notes": "Для бытовых ситуаций, где проблема кроется не в сумме, а в жесте.",
+    "banned": false,
+    "usageCount": 0,
+    "recentUsageCount": 0,
+    "isOverused": false,
+    "isCustom": false,
+    "createdAt": "2026-11-20T23:51:05.127Z",
+    "updatedAt": "2026-11-20T23:51:05.127Z"
+  },
+  {
+    "id": "pb-07",
+    "phrase": "Не всё так однозначно.",
+    "collections": [
+      "debate"
+    ],
+    "tone": "neutral",
+    "maxFrequencyPer10": 2,
+    "weight": 6,
+    "notes": "Мягкий разворот к позиции второй стороны.",
+    "banned": false,
+    "usageCount": 0,
+    "recentUsageCount": 0,
+    "isOverused": false,
+    "isCustom": false,
+    "createdAt": "2026-11-20T23:51:05.127Z",
+    "updatedAt": "2026-11-20T23:51:05.127Z"
+  },
+  {
+    "id": "pb-08",
+    "phrase": "Тут уже каждый сам себе судья.",
+    "collections": [
+      "debate"
+    ],
+    "tone": "neutral",
+    "maxFrequencyPer10": 2,
+    "weight": 7,
+    "notes": "Фиксация открытого финала без навязанного приговора.",
+    "banned": false,
+    "usageCount": 0,
+    "recentUsageCount": 0,
+    "isOverused": false,
+    "isCustom": false,
+    "createdAt": "2026-11-20T23:51:05.127Z",
+    "updatedAt": "2026-11-20T23:51:05.127Z"
+  },
+  {
+    "id": "pb-09",
+    "phrase": "Вроде договорились, но жизнь внесла свои коррективы.",
+    "collections": [
+      "debate",
+      "romantic"
+    ],
+    "tone": "observational",
+    "maxFrequencyPer10": 2,
+    "weight": 7,
+    "notes": "Для историй, где планы пары проверяются реальным случаем.",
+    "banned": false,
+    "usageCount": 0,
+    "recentUsageCount": 0,
+    "isOverused": false,
+    "isCustom": false,
+    "createdAt": "2026-11-20T23:51:05.127Z",
+    "updatedAt": "2026-11-20T23:51:05.127Z"
+  },
+  {
+    "id": "pb-10",
+    "phrase": "И тут выяснилась одна интересная подробность.",
+    "collections": [
+      "debate",
+      "romantic"
+    ],
+    "tone": "intrigued",
+    "maxFrequencyPer10": 2,
+    "weight": 8,
+    "notes": "Плавный переход к скрытому ожиданию или твисту.",
+    "banned": false,
+    "usageCount": 0,
+    "recentUsageCount": 0,
+    "isOverused": false,
+    "isCustom": false,
+    "createdAt": "2026-11-20T23:51:05.127Z",
+    "updatedAt": "2026-11-20T23:51:05.127Z"
   }
 ]

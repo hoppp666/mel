@@ -1,343 +1,65 @@
 [
   {
-    "id": "JOB-AUTO-MWV2JXY0",
-    "collection": "romantic",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL",
-      "SRC-HUFFPOST-REL",
-      "SRC-YOURTANGO"
-    ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 4,
-    "foundCount": 4,
-    "failedCount": 0,
-    "startedAt": "2026-11-24T19:09:45.109Z",
-    "logs": [
-      "[2026-11-24T19:09:45.109Z] Автозапуск github_actions (RBATCH-0014, romantic)",
-      "[2026-11-24T19:13:12.447Z] Новых: 4, дубликатов: 0, проанализировано: 4, в базу: 0."
-    ],
-    "finishedAt": "2026-11-24T19:13:12.447Z"
-  },
-  {
-    "id": "JOB-AUTO-MWU7479E",
+    "id": "JOB-MWPLJZ6V",
     "collection": "debate",
     "sourceIds": [
-      "SRC-PSYTODAY-REL",
-      "SRC-HUFFPOST-REL",
-      "SRC-YOURTANGO"
+      "media-the-cut",
+      "media-yourtango"
     ],
-    "categoryFocus": "balanced",
+    "sourceNames": [
+      "The Cut — Relationships",
+      "YourTango"
+    ],
+    "category": "ALL_BALANCED",
     "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
+    "requestedCount": 2,
+    "processedCount": 2,
+    "foundCount": 2,
+    "ideasGeneratedCount": 0,
+    "duplicatesDetectedCount": 1,
+    "depth": "standard",
+    "conversionMode": "analysis_and_idea",
     "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 13,
-    "foundCount": 4,
-    "failedCount": 0,
-    "startedAt": "2026-11-24T04:29:43.144Z",
+    "searchMethodUsed": "direct_public_feed",
     "logs": [
-      "[2026-11-24T04:29:43.144Z] Автозапуск github_actions (RBATCH-0013, debate)",
-      "[2026-11-24T04:30:25.057Z] Новых: 4, дубликатов: 9, проанализировано: 4, в базу: 0."
+      {
+        "timestamp": "2026-11-20T23:15:03.271Z",
+        "level": "info",
+        "message": "Запущено исследование (DEBATE), источников: 2, лимит материалов: 2."
+      },
+      {
+        "timestamp": "2026-11-20T23:15:03.655Z",
+        "level": "info",
+        "message": "The Cut — Relationships: The Cut — Relationships: получено 2 открытых публикаций напрямую"
+      },
+      {
+        "timestamp": "2026-11-20T23:15:03.655Z",
+        "level": "info",
+        "message": "Поиск завершён: найдено 2 новых уникальных URL."
+      },
+      {
+        "timestamp": "2026-11-20T23:15:46.573Z",
+        "level": "warn",
+        "message": "RES-D-0001: материал «‘If He Knew How Much Stuff I Was Buying, He’d See Me Differe» сохранён со статусом analysisStatus=failed (Gemini API: {\"error\":{\"code\":504,\"message\":\"Deadline expired before operation could complete.\",\"status\":\"DEADLINE_EXCEEDED\"}})."
+      },
+      {
+        "timestamp": "2026-11-20T23:15:51.522Z",
+        "level": "warn",
+        "message": "RES-D-0002: материал «Anthony Mackie Says It’s ‘Hard’ to Date As an Older Man» сохранён со статусом analysisStatus=failed (Gemini API: {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again l)."
+      },
+      {
+        "timestamp": "2026-11-20T23:15:51.524Z",
+        "level": "warn",
+        "message": "Исследование завершено: сохранено материалов 2, идей создано 0, совпадений 1, ошибок ИИ-анализа: 2."
+      }
     ],
-    "finishedAt": "2026-11-24T04:30:25.057Z"
-  },
-  {
-    "id": "JOB-AUTO-MWU5PDIL",
-    "collection": "romantic",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL",
-      "SRC-HUFFPOST-REL",
-      "SRC-YOURTANGO"
+    "resultIds": [
+      "RES-D-0001",
+      "RES-D-0002"
     ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 8,
-    "foundCount": 4,
-    "failedCount": 0,
-    "startedAt": "2026-11-24T03:50:09.862Z",
-    "logs": [
-      "[2026-11-24T03:50:09.862Z] Автозапуск github_actions (RBATCH-0012, romantic)",
-      "[2026-11-24T03:50:45.898Z] Новых: 4, дубликатов: 4, проанализировано: 4, в базу: 0."
-    ],
-    "finishedAt": "2026-11-24T03:50:45.898Z"
-  },
-  {
-    "id": "JOB-AUTO-MWU3X54D",
-    "collection": "debate",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL",
-      "SRC-HUFFPOST-REL",
-      "SRC-YOURTANGO"
-    ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 4,
-    "foundCount": 4,
-    "failedCount": 0,
-    "startedAt": "2026-11-24T03:00:12.946Z",
-    "logs": [
-      "[2026-11-24T03:00:12.946Z] Автозапуск github_actions (RBATCH-0011, debate)",
-      "[2026-11-24T03:02:05.113Z] Новых: 4, дубликатов: 0, проанализировано: 4, в базу: 0."
-    ],
-    "finishedAt": "2026-11-24T03:02:05.113Z"
-  },
-  {
-    "id": "JOB-AUTO-MWTO09PJ",
-    "collection": "romantic",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL",
-      "SRC-HUFFPOST-REL",
-      "SRC-YOURTANGO"
-    ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 4,
-    "foundCount": 4,
-    "failedCount": 0,
-    "startedAt": "2026-11-23T19:34:46.551Z",
-    "logs": [
-      "[2026-11-23T19:34:46.551Z] Автозапуск github_actions (RBATCH-0010, romantic)",
-      "[2026-11-23T19:38:01.952Z] Новых: 4, дубликатов: 0, проанализировано: 4, в базу: 0."
-    ],
-    "finishedAt": "2026-11-23T19:38:01.952Z"
-  },
-  {
-    "id": "JOB-AUTO-MWSCE8US",
-    "collection": "debate",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL",
-      "SRC-HUFFPOST-REL",
-      "SRC-YOURTANGO"
-    ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 4,
-    "foundCount": 4,
-    "failedCount": 0,
-    "startedAt": "2026-11-22T21:21:56.992Z",
-    "logs": [
-      "[2026-11-22T21:21:56.992Z] Автозапуск github_actions (RBATCH-0009, debate)",
-      "[2026-11-22T21:22:52.929Z] Новых: 4, дубликатов: 0, проанализировано: 4, в базу: 0."
-    ],
-    "finishedAt": "2026-11-22T21:22:52.929Z"
-  },
-  {
-    "id": "JOB-AUTO-MWS0C0DF",
-    "collection": "romantic",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL",
-      "SRC-HUFFPOST-REL",
-      "SRC-YOURTANGO"
-    ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 10,
-    "foundCount": 4,
-    "failedCount": 0,
-    "startedAt": "2026-11-22T15:44:17.291Z",
-    "logs": [
-      "[2026-11-22T15:44:17.291Z] Автозапуск github_actions (RBATCH-0008, romantic)",
-      "[2026-11-22T15:51:40.812Z] Новых: 4, дубликатов: 6, проанализировано: 4, в базу: 0."
-    ],
-    "finishedAt": "2026-11-22T15:51:40.812Z"
-  },
-  {
-    "id": "JOB-AUTO-MWRDB3UP",
-    "collection": "debate",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL",
-      "SRC-YOURTANGO"
-    ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 8,
-    "foundCount": 4,
-    "failedCount": 0,
-    "startedAt": "2026-11-22T04:59:44.049Z",
-    "logs": [
-      "[2026-11-22T04:59:44.049Z] Автозапуск github_actions (RBATCH-0007, debate)",
-      "[2026-11-22T05:00:19.230Z] Новых: 4, дубликатов: 4, проанализировано: 4, в базу: 0."
-    ],
-    "finishedAt": "2026-11-22T05:00:19.230Z"
-  },
-  {
-    "id": "JOB-AUTO-MWR2KKGX",
-    "collection": "romantic",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL",
-      "SRC-HUFFPOST-REL",
-      "SRC-YOURTANGO"
-    ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 4,
-    "foundCount": 4,
-    "failedCount": 0,
-    "startedAt": "2026-11-21T23:59:09.512Z",
-    "logs": [
-      "[2026-11-21T23:59:09.512Z] Автозапуск github_actions (RBATCH-0006, romantic)",
-      "[2026-11-22T00:00:11.970Z] Новых: 4, дубликатов: 0, проанализировано: 4, в базу: 0."
-    ],
-    "finishedAt": "2026-11-22T00:00:11.970Z"
-  },
-  {
-    "id": "JOB-AUTO-MWQQIFFQ",
-    "collection": "debate",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL",
-      "SRC-YOURTANGO"
-    ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 4,
-    "foundCount": 4,
-    "failedCount": 0,
-    "startedAt": "2026-11-21T18:21:34.537Z",
-    "logs": [
-      "[2026-11-21T18:21:34.537Z] Автозапуск github_actions (RBATCH-0005, debate)",
-      "[2026-11-21T18:26:51.518Z] Новых: 4, дубликатов: 0, проанализировано: 4, в базу: 0."
-    ],
-    "finishedAt": "2026-11-21T18:26:51.518Z"
-  },
-  {
-    "id": "JOB-AUTO-MWQBUFEK",
-    "collection": "romantic",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL",
-      "SRC-YOURTANGO"
-    ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 12,
-    "foundCount": 4,
-    "failedCount": 0,
-    "startedAt": "2026-11-21T11:27:44.726Z",
-    "logs": [
-      "[2026-11-21T11:27:44.726Z] Автозапуск github_actions (RBATCH-0004, romantic)",
-      "[2026-11-21T11:32:55.818Z] Новых: 4, дубликатов: 8, проанализировано: 8, в базу: 0."
-    ],
-    "finishedAt": "2026-11-21T11:32:55.818Z"
-  },
-  {
-    "id": "JOB-AUTO-MWQ2E1U2",
-    "collection": "debate",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL"
-    ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 8,
-    "foundCount": 0,
-    "failedCount": 0,
-    "startedAt": "2026-11-21T07:02:45.870Z",
-    "logs": [
-      "[2026-11-21T07:02:45.870Z] Автозапуск github_actions (RBATCH-0003, debate)",
-      "[2026-11-21T07:06:20.265Z] Новых: 0, дубликатов: 8, проанализировано: 0, в базу: 0."
-    ],
-    "finishedAt": "2026-11-21T07:06:20.265Z"
-  },
-  {
-    "id": "JOB-AUTO-MWQ1FUVU",
-    "collection": "romantic",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL"
-    ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 8,
-    "foundCount": 0,
-    "failedCount": 0,
-    "startedAt": "2026-11-21T06:39:40.327Z",
-    "logs": [
-      "[2026-11-21T06:39:40.327Z] Автозапуск github_actions (RBATCH-0002, romantic)",
-      "[2026-11-21T06:39:44.949Z] Новых: 0, дубликатов: 8, проанализировано: 0, в базу: 0."
-    ],
-    "finishedAt": "2026-11-21T06:39:44.949Z"
-  },
-  {
-    "id": "JOB-AUTO-MWQ0GI8K",
-    "collection": "debate",
-    "sourceIds": [
-      "SRC-PSYTODAY-REL"
-    ],
-    "categoryFocus": "balanced",
-    "sourceLanguage": "en",
-    "requestedCount": 4,
-    "analysisDepth": "standard",
-    "transformMode": "analyze_and_generate",
-    "status": "completed",
-    "methodUsed": "direct_public_feed",
-    "processedCount": 8,
-    "foundCount": 4,
-    "failedCount": 1,
-    "startedAt": "2026-11-21T06:12:13.945Z",
-    "logs": [
-      "[2026-11-21T06:12:13.945Z] Автозапуск github_actions (RBATCH-0001, debate)",
-      "[2026-11-21T06:12:46.057Z] Новых: 4, дубликатов: 4, проанализировано: 0, в базу: 0."
-    ],
-    "finishedAt": "2026-11-21T06:12:46.057Z"
+    "createdAt": "2026-11-20T23:15:03.271Z",
+    "updatedAt": "2026-11-20T23:15:51.524Z",
+    "errorMessage": "ИИ-анализ завершился с ошибками (2/2): {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}. Найденные реальные материалы сохранены как карточки для повторного анализа.",
+    "completedAt": "2026-11-20T23:15:51.523Z"
   }
 ]

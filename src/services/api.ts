@@ -1,874 +1,755 @@
-import {
+import type {
   AppSettings,
-  AutonomousMonitoringSnapshot,
-  AutonomousSchedulerConfig,
-  BackupEntry,
   CollectionType,
   ContentDraft,
   ContentDraftStatus,
-  ContentExportMode,
   ContentLengthPreset,
-  ContentMetrics,
-  DatabaseSnapshotResponse,
-  NarrativeStartStyle,
-  PendingBatch,
+  ContentQualityBreakdown,
+  ContentRevisionSnapshot,
+  ContentStatistics,
+  DatabaseState,
+  DatabaseStats,
+  NarrativeStructurePattern,
   PhrasebookEntry,
-  PublicationItem,
-  PublicationManualStats,
-  PublishingAnalytics,
-  PublishingLogEntry,
-  PublishingQueueStatus,
-  PublishingSettings,
+  PhrasebookTone,
+  ResearchConversionMode,
+  ResearchDepth,
+  ResearchDuplicateMatch,
   ResearchJob,
   ResearchResult,
   ResearchSource,
   ResearchStatistics,
-  RewriteMode,
-  SchedulerRunLog,
+  RewriteActionType,
   SimilarityMatch,
-  StagedStoryCandidate,
   StoryPlot,
-  TelegramIntegrationStatus,
   UsageStatus,
   VerificationStatus,
-  VoiceConfig,
-  VoicePreset,
-} from '../shared/types.js';
+  VoiceEngineConfig,
+  VoiceSliders,
+} from '../shared/types.ts';
 
-export class ApiError extends Error {
-  status: number;
-  matches?: SimilarityMatch[];
-  pendingBatch?: PendingBatch;
-
-  constructor(
-    message: string,
-    status: number,
-    extra?: { matches?: SimilarityMatch[]; pendingBatch?: PendingBatch }
-  ) {
-    super(message);
-    this.status = status;
-    this.matches = extra?.matches;
-    this.pendingBatch = extra?.pendingBatch;
-  }
+export interface StagedBatch {
+  batchNumber: number;
+  collection: CollectionType;
+  targetCategory: string;
+  researchMode: 'original' | 'external_search';
+  usedSearchGrounding: boolean;
+  groundingUrls: Array<{ uri: string; title: string }>;
+  createdAt: string;
+  candidates: StoryPlot[];
 }
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options?.headers || {}),
-    },
-    ...options,
-  });
+export interface BackupSnapshotInfo {
+  filename: string;
+  sizeBytes: number;
+  createdAt: string;
+}
 
-  const text = await res.text();
-  let data: Record<string, unknown> = {};
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      throw new ApiError(res.ok ? 'Некорректный ответ сервера' : `Ошибка HTTP ${res.status}`, res.status);
-    }
-  }
+export interface DatabasePayload extends DatabaseState {
+  stats: DatabaseStats;
+  backups: BackupSnapshotInfo[];
+  stagedBatch: StagedBatch | null;
+}
 
+async function handleJson<T>(res: Response): Promise<T> {
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new ApiError(
-      String(data.error || `Ошибка запроса (${res.status})`),
-      res.status,
-      {
-        matches: data.matches as SimilarityMatch[] | undefined,
-        pendingBatch: data.pendingBatch as PendingBatch | undefined,
-      }
-    );
+    const err = new Error(data.error || `Ошибка сервера (${res.status})`) as Error & {
+      status?: number;
+      matches?: SimilarityMatch[];
+      candidate?: StoryPlot;
+    };
+    err.status = res.status;
+    err.matches = data.matches;
+    err.candidate = data.candidate;
+    throw err;
   }
-
   return data as T;
 }
 
-// ============================================================================
-// ЭТАП 1: STORY DATABASE GENERATOR
-// ============================================================================
-
-export function fetchDatabase(): Promise<DatabaseSnapshotResponse> {
-  return request<DatabaseSnapshotResponse>('/api/database');
+export async function fetchDatabase(): Promise<DatabasePayload> {
+  const res = await fetch('/api/database');
+  return handleJson<DatabasePayload>(res);
 }
 
-export function checkStorySimilarity(
-  candidate: Partial<StoryPlot>
-): Promise<{ matches: SimilarityMatch[]; duplicateFlag: boolean }> {
-  return request('/api/stories/check-similarity', {
-    method: 'POST',
-    body: JSON.stringify(candidate),
-  });
-}
-
-export function createStory(
-  payload: Partial<StoryPlot> & { forceSave?: boolean }
-): Promise<{ story: StoryPlot; snapshot: DatabaseSnapshotResponse }> {
-  return request('/api/stories', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function updateStory(
-  id: string,
-  updates: Partial<StoryPlot>
-): Promise<{ story: StoryPlot; snapshot: DatabaseSnapshotResponse }> {
-  return request(`/api/stories/${encodeURIComponent(id)}`, {
-    method: 'PUT',
-    body: JSON.stringify(updates),
-  });
-}
-
-export function updateStoryStatus(
-  id: string,
-  payload: { verificationStatus?: VerificationStatus; usageStatus?: UsageStatus }
-): Promise<{ story: StoryPlot; snapshot: DatabaseSnapshotResponse }> {
-  return request(`/api/stories/${encodeURIComponent(id)}/status`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function mergeStories(payload: {
-  targetStoryId: string;
-  nuanceToAppend: string;
-  newTitle?: string;
-}): Promise<{ story: StoryPlot; snapshot: DatabaseSnapshotResponse }> {
-  return request('/api/stories/merge', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function deleteStory(
-  id: string
-): Promise<{ deleted: boolean; snapshot: DatabaseSnapshotResponse }> {
-  return request(`/api/stories/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  });
-}
-
-export function rescanUniqueness(): Promise<{ snapshot: DatabaseSnapshotResponse }> {
-  return request('/api/uniqueness/rescan', { method: 'POST' });
-}
-
-export function generateBatch(payload: {
-  collection: CollectionType;
-  categoryFocus: string;
-  count: number;
-  searchMode: 'original' | 'web_search';
-}): Promise<{ pendingBatch: PendingBatch }> {
-  return request('/api/batches/generate', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function updateStagedCandidate(
-  candidateId: string,
-  updates: Partial<StagedStoryCandidate>
-): Promise<{ pendingBatch: PendingBatch }> {
-  return request(`/api/batches/staged/${encodeURIComponent(candidateId)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  });
-}
-
-export function commitStagedBatch(): Promise<{ snapshot: DatabaseSnapshotResponse }> {
-  return request('/api/batches/commit', { method: 'POST' });
-}
-
-export function discardStagedBatch(): Promise<{
-  cleared: boolean;
-  snapshot: DatabaseSnapshotResponse;
-}> {
-  return request('/api/batches/staged', { method: 'DELETE' });
-}
-
-export function createCustomCategory(payload: {
-  collection: CollectionType;
-  name: string;
-  subcategories: string[];
-}): Promise<{ snapshot: DatabaseSnapshotResponse }> {
-  return request('/api/categories', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function updateSettings(
-  settings: Partial<AppSettings>
-): Promise<{ snapshot: DatabaseSnapshotResponse }> {
-  return request('/api/settings', {
-    method: 'PUT',
-    body: JSON.stringify(settings),
-  });
-}
-
-export function createDatabaseBackup(): Promise<{
-  backup: BackupEntry;
-  snapshot: DatabaseSnapshotResponse;
-}> {
-  return request('/api/backup', { method: 'POST' });
-}
-
-export function restoreDatabaseBackup(
-  filename: string
-): Promise<{ snapshot: DatabaseSnapshotResponse }> {
-  return request('/api/backup/restore', {
-    method: 'POST',
-    body: JSON.stringify({ filename }),
-  });
-}
-
-export function importStoriesJson(
-  stories: Partial<StoryPlot>[]
-): Promise<{
-  imported: number;
-  skippedDuplicates: number;
-  snapshot: DatabaseSnapshotResponse;
-}> {
-  return request('/api/import', {
-    method: 'POST',
-    body: JSON.stringify({ stories }),
-  });
-}
-
-export function getExportJsonUrl(collection?: string, status?: string): string {
-  const params = new URLSearchParams();
-  if (collection && collection !== 'all') params.set('collection', collection);
-  if (status && status !== 'all') params.set('status', status);
-  const qs = params.toString();
-  return `/api/export/json${qs ? `?${qs}` : ''}`;
-}
-
-export function getExportCsvUrl(collection?: string, status?: string): string {
-  const params = new URLSearchParams();
-  if (collection && collection !== 'all') params.set('collection', collection);
-  if (status && status !== 'all') params.set('status', status);
-  const qs = params.toString();
-  return `/api/export/csv${qs ? `?${qs}` : ''}`;
-}
-
-export function getProjectArchiveUrl(): string {
-  return '/api/export/archive';
-}
-
-export function getPatchArchiveUrl(): string {
-  return '/api/export/patch-archive';
-}
-
-export async function downloadZipArchiveBlob(url: string): Promise<Blob> {
-  const res = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
-  if (!res.ok) {
-    throw new Error(`Не удалось скачать архив (HTTP ${res.status})`);
-  }
-  const buf = await res.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
-    throw new Error(
-      'Сервер вернул не ZIP-файл (возможно, прокси предпросмотра перехватил запрос — откройте приложение в отдельной вкладке браузера).'
-    );
-  }
-  return new Blob([buf], { type: 'application/zip' });
-}
-
-// ============================================================================
-// ЭТАП 2: FOREIGN RESEARCH ENGINE
-// ============================================================================
-
-export function fetchResearchStatistics(): Promise<{ statistics: ResearchStatistics }> {
-  return request('/api/research/statistics');
-}
-
-export function fetchResearchSources(): Promise<{ sources: ResearchSource[] }> {
-  return request('/api/research/sources');
-}
-
-export function createResearchSource(
-  payload: Partial<ResearchSource>
-): Promise<{ source: ResearchSource; sources: ResearchSource[] }> {
-  return request('/api/research/sources', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function updateResearchSource(
-  id: string,
-  updates: Partial<ResearchSource>
-): Promise<{ source: ResearchSource; sources: ResearchSource[] }> {
-  return request(`/api/research/sources/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  });
-}
-
-export function deleteResearchSource(
-  id: string
-): Promise<{ deleted: boolean; sources: ResearchSource[] }> {
-  return request(`/api/research/sources/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  });
-}
-
-export function checkResearchSource(
-  id: string
-): Promise<{ source: ResearchSource; sources: ResearchSource[] }> {
-  return request(`/api/research/sources/${encodeURIComponent(id)}/check`, {
-    method: 'POST',
-  });
-}
-
-export function checkAllResearchSources(): Promise<{ sources: ResearchSource[] }> {
-  return request('/api/research/sources/check-all', { method: 'POST' });
-}
-
-export function startResearchSearch(payload: {
-  collection: CollectionType;
-  sourceIds: string[];
-  categoryFocus: string;
-  sourceLanguage: string;
-  requestedCount: number;
-  analysisDepth: 'standard' | 'deep';
-  transformMode: 'analyze_only' | 'analyze_and_generate';
-}): Promise<{ job: ResearchJob }> {
-  return request('/api/research/search', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function fetchResearchJobs(): Promise<{ jobs: ResearchJob[] }> {
-  return request('/api/research/jobs');
-}
-
-export function cancelResearchJob(id: string): Promise<{ job: ResearchJob }> {
-  return request(`/api/research/jobs/${encodeURIComponent(id)}/cancel`, {
-    method: 'POST',
-  });
-}
-
-export function fetchResearchResults(): Promise<{ results: ResearchResult[] }> {
-  return request('/api/research/results');
-}
-
-export function updateResearchResult(
-  id: string,
-  updates: Partial<ResearchResult>
-): Promise<{ result: ResearchResult }> {
-  return request(`/api/research/results/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  });
-}
-
-export function reanalyzeResearchResult(id: string): Promise<{ result: ResearchResult }> {
-  return request(`/api/research/results/${encodeURIComponent(id)}/analyze`, {
-    method: 'POST',
-  });
-}
-
-export function generateIdeaFromResult(id: string): Promise<{ result: ResearchResult }> {
-  return request(`/api/research/results/${encodeURIComponent(id)}/generate-idea`, {
-    method: 'POST',
-  });
-}
-
-export function checkResearchDuplicate(id: string): Promise<{ result: ResearchResult }> {
-  return request(`/api/research/results/${encodeURIComponent(id)}/check-duplicate`, {
-    method: 'POST',
-  });
-}
-
-export function approveResearchResult(
-  id: string,
-  forceApprove = false
-): Promise<{ result: ResearchResult; story: StoryPlot; snapshot: DatabaseSnapshotResponse }> {
-  return request(`/api/research/results/${encodeURIComponent(id)}/approve`, {
-    method: 'POST',
-    body: JSON.stringify({ forceApprove }),
-  });
-}
-
-export function rejectResearchResult(id: string): Promise<{ result: ResearchResult }> {
-  return request(`/api/research/results/${encodeURIComponent(id)}/reject`, {
-    method: 'POST',
-  });
-}
-
-export function createResearchBackup(): Promise<{ backup: BackupEntry }> {
-  return request('/api/research/backup', { method: 'POST' });
-}
-
-// ============================================================================
-// ЭТАП 3: STORY GENERATOR + MELO_LOVE VOICE ENGINE
-// ============================================================================
-
-export interface ContentStateResponse {
-  metrics: ContentMetrics;
-  availableStories: StoryPlot[];
-  drafts: ContentDraft[];
-  voiceConfig: VoiceConfig;
-  systemPresets: VoicePreset[];
-  phrasebook: PhrasebookEntry[];
-  isGenerating: boolean;
-}
-
-export function fetchContentState(): Promise<ContentStateResponse> {
-  return request<ContentStateResponse>('/api/content/state');
-}
-
-export function generateContent(payload: {
-  sourceStoryId: string;
-  lengthPreset: ContentLengthPreset;
-  narrativeStyle?: NarrativeStartStyle;
-  variantsCount: number;
-  voicePresetId?: string;
-}): Promise<{ created: ContentDraft[]; metrics: ContentMetrics }> {
-  return request('/api/content/generate', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function cancelContentGeneration(): Promise<{ cancelled: boolean }> {
-  return request('/api/content/generate/cancel', { method: 'POST' });
-}
-
-export function createContentDraft(payload: {
-  sourceStoryId: string;
-  title: string;
-  subtitle?: string;
-  body: string;
-  triggerQuestion?: string;
-  status?: ContentDraftStatus;
-}): Promise<{ draft: ContentDraft; metrics: ContentMetrics }> {
-  return request('/api/content/drafts', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function updateContentDraft(
-  id: string,
-  updates: {
-    title?: string;
-    subtitle?: string;
-    body?: string;
-    triggerQuestion?: string;
-    revisionReason?: string;
-  }
-): Promise<{ draft: ContentDraft; metrics: ContentMetrics }> {
-  return request(`/api/content/drafts/${encodeURIComponent(id)}`, {
-    method: 'PUT',
-    body: JSON.stringify(updates),
-  });
-}
-
-export function updateContentDraftStatus(
-  id: string,
-  status: ContentDraftStatus
-): Promise<{ draft: ContentDraft; metrics: ContentMetrics }> {
-  return request(`/api/content/drafts/${encodeURIComponent(id)}/status`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status }),
-  });
-}
-
-export function rewriteContentDraft(
-  id: string,
-  mode: RewriteMode
-): Promise<{ draft: ContentDraft; metrics: ContentMetrics }> {
-  return request(`/api/content/drafts/${encodeURIComponent(id)}/rewrite`, {
-    method: 'POST',
-    body: JSON.stringify({ mode }),
-  });
-}
-
-export function restoreContentVersion(
-  id: string,
-  version: number
-): Promise<{ draft: ContentDraft; metrics: ContentMetrics }> {
-  return request(`/api/content/drafts/${encodeURIComponent(id)}/restore-version`, {
-    method: 'POST',
-    body: JSON.stringify({ version }),
-  });
-}
-
-export function deleteContentDraft(
-  id: string
-): Promise<{ deleted: boolean; metrics: ContentMetrics }> {
-  return request(`/api/content/drafts/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  });
-}
-
-export function updateVoiceConfig(
-  payload: Partial<VoiceConfig>
-): Promise<{ voiceConfig: VoiceConfig }> {
-  return request('/api/content/voice-config', {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function createVoicePreset(payload: {
-  name: string;
-  description?: string;
-  debate?: VoiceConfig['debate'];
-  romantic?: VoiceConfig['romantic'];
-}): Promise<{ voiceConfig: VoiceConfig; preset: VoicePreset }> {
-  return request('/api/content/voice-presets', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function deleteVoicePreset(id: string): Promise<{ voiceConfig: VoiceConfig }> {
-  return request(`/api/content/voice-presets/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  });
-}
-
-export function createPhrasebookEntry(
-  payload: Partial<PhrasebookEntry>
-): Promise<{ entry: PhrasebookEntry; phrasebook: PhrasebookEntry[] }> {
-  return request('/api/content/phrasebook', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function updatePhrasebookEntry(
-  id: string,
-  updates: Partial<PhrasebookEntry>
-): Promise<{ entry: PhrasebookEntry; phrasebook: PhrasebookEntry[] }> {
-  return request(`/api/content/phrasebook/${encodeURIComponent(id)}`, {
-    method: 'PUT',
-    body: JSON.stringify(updates),
-  });
-}
-
-export function deletePhrasebookEntry(
-  id: string
-): Promise<{ phrasebook: PhrasebookEntry[] }> {
-  return request(`/api/content/phrasebook/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  });
-}
-
-export async function exportContentJson(
-  mode: ContentExportMode,
-  contentIds?: string[]
-): Promise<Blob> {
-  const res = await fetch('/api/content/export', {
+export async function checkSimilarity(
+  candidate: Partial<StoryPlot>,
+  threshold?: number
+): Promise<{ hasDuplicates: boolean; matches: SimilarityMatch[] }> {
+  const res = await fetch('/api/stories/check-similarity', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode, contentIds }),
+    body: JSON.stringify({ ...candidate, threshold }),
   });
-  if (!res.ok) {
-    throw new ApiError('Не удалось экспортировать публикации', res.status);
+  return handleJson(res);
+}
+
+export async function createStory(
+  story: Partial<StoryPlot>,
+  forceSave = false
+): Promise<{ story: StoryPlot; stats: DatabaseStats }> {
+  const res = await fetch('/api/stories', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ story, forceSave }),
+  });
+  return handleJson(res);
+}
+
+export async function updateStory(
+  id: string,
+  story: Partial<StoryPlot>
+): Promise<{ story: StoryPlot; stats: DatabaseStats }> {
+  const res = await fetch(`/api/stories/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(story),
+  });
+  return handleJson(res);
+}
+
+export async function updateStoryStatus(
+  id: string,
+  payload: {
+    verificationStatus?: VerificationStatus;
+    usageStatus?: UsageStatus;
+    duplicateFlag?: boolean;
   }
-  return res.blob();
-}
-
-export function importContentJson(
-  items: unknown[]
-): Promise<{ imported: number; errors: string[]; metrics: ContentMetrics }> {
-  return request('/api/content/import', {
-    method: 'POST',
-    body: JSON.stringify({ items }),
-  });
-}
-
-export function createContentBackup(): Promise<{ backup: BackupEntry }> {
-  return request('/api/content/backup', { method: 'POST' });
-}
-
-// ============================================================================
-// ЭТАП 4: CONTENT STUDIO + PUBLISHING INFRASTRUCTURE
-// ============================================================================
-
-export interface PublishingStateResponse {
-  publications: PublicationItem[];
-  settings: PublishingSettings;
-  integrationStatus: TelegramIntegrationStatus;
-  analytics: PublishingAnalytics;
-  logs: PublishingLogEntry[];
-  eligibleDrafts: ContentDraft[];
-  eligibleStories: StoryPlot[];
-}
-
-export function fetchPublishingState(): Promise<PublishingStateResponse> {
-  return request<PublishingStateResponse>('/api/publishing/state');
-}
-
-export function createPublication(payload: {
-  sourceDraftId?: string;
-  sourceStoryId?: string;
-  title?: string;
-  teaser?: string;
-  body?: string;
-  closingQuestion?: string;
-  hashtags?: string[];
-  hasImageAttachment?: boolean;
-}): Promise<{ publication: PublicationItem; analytics: PublishingAnalytics }> {
-  return request('/api/publishing/publications', {
-    method: 'POST',
+): Promise<{ story: StoryPlot; stats: DatabaseStats }> {
+  const res = await fetch(`/api/stories/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  return handleJson(res);
 }
 
-export function updatePublication(
-  id: string,
-  updates: Partial<PublicationItem> & { revisionReason?: string }
-): Promise<{ publication: PublicationItem; analytics: PublishingAnalytics }> {
-  return request(`/api/publishing/publications/${encodeURIComponent(id)}`, {
-    method: 'PUT',
-    body: JSON.stringify(updates),
-  });
-}
-
-export function updatePublicationStatus(
-  id: string,
-  status: PublishingQueueStatus,
-  extra?: { scheduledAt?: string; confirmationSource?: string }
-): Promise<{ publication: PublicationItem; analytics: PublishingAnalytics }> {
-  return request(`/api/publishing/publications/${encodeURIComponent(id)}/status`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status, ...(extra || {}) }),
-  });
-}
-
-export function restorePublicationVersion(
-  id: string,
-  version: number
-): Promise<{ publication: PublicationItem; analytics: PublishingAnalytics }> {
-  return request(`/api/publishing/publications/${encodeURIComponent(id)}/restore-version`, {
+export async function mergeStories(payload: {
+  targetId: string;
+  mergedFields: Partial<StoryPlot>;
+  removeDuplicateId?: string;
+}): Promise<{ story: StoryPlot; stats: DatabaseStats }> {
+  const res = await fetch('/api/stories/merge', {
     method: 'POST',
-    body: JSON.stringify({ version }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
+  return handleJson(res);
 }
 
-export function deletePublication(
-  id: string
-): Promise<{ deleted: boolean; analytics: PublishingAnalytics }> {
-  return request(`/api/publishing/publications/${encodeURIComponent(id)}`, {
+export async function deleteStory(id: string): Promise<{ deletedId: string; stats: DatabaseStats }> {
+  const res = await fetch(`/api/stories/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
+  return handleJson(res);
 }
 
-export function generatePublicationHeadlines(
-  id: string
-): Promise<{ headlines: string[]; publication: PublicationItem }> {
-  return request(`/api/publishing/publications/${encodeURIComponent(id)}/ai-headlines`, {
+export async function rescanUniqueness(
+  threshold?: number
+): Promise<{ stories: StoryPlot[]; stats: DatabaseStats }> {
+  const res = await fetch('/api/uniqueness/rescan', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ threshold }),
   });
+  return handleJson(res);
 }
 
-export function generatePublicationSeoProposal(id: string): Promise<{
-  proposal: {
-    adaptedTitle: string;
-    adaptedTeaser: string;
-    adaptedBody: string;
-    seoKeywords: string[];
-    suggestedHashtags: string[];
-    diffSummary: string;
-  };
-}> {
-  return request(`/api/publishing/publications/${encodeURIComponent(id)}/ai-seo`, {
+export async function generateBatch(params: {
+  collection: CollectionType;
+  targetCategory: string;
+  batchSize: number;
+  researchMode: 'original' | 'external_search';
+}): Promise<{ stagedBatch: StagedBatch }> {
+  const res = await fetch('/api/batches/generate', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
   });
+  return handleJson(res);
 }
 
-export function generatePublicationShortenProposal(id: string): Promise<{
-  proposal: { shortenedBody: string; explanation: string };
-}> {
-  return request(`/api/publishing/publications/${encodeURIComponent(id)}/ai-shorten`, {
-    method: 'POST',
+export async function updateStagedCandidate(
+  candidateId: string,
+  patch: Partial<StoryPlot>
+): Promise<{ stagedBatch: StagedBatch }> {
+  const res = await fetch(`/api/batches/staged/${encodeURIComponent(candidateId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
   });
+  return handleJson(res);
 }
 
-export function suggestPublicationHashtags(
-  id: string
-): Promise<{ hashtags: string[] }> {
-  return request(`/api/publishing/publications/${encodeURIComponent(id)}/ai-hashtags`, {
-    method: 'POST',
-  });
-}
-
-export function sendPublicationToTelegram(
-  id: string,
-  dryRun?: boolean
-): Promise<{
-  mode: 'dry_run' | 'live';
-  ok: boolean;
-  publication: PublicationItem;
-  formattedPreview: string;
-  messageId?: number;
-  note: string;
-  analytics: PublishingAnalytics;
-}> {
-  return request(`/api/publishing/publications/${encodeURIComponent(id)}/send-telegram`, {
-    method: 'POST',
-    body: JSON.stringify({ dryRun }),
-  });
-}
-
-export function confirmZenDelivery(
-  id: string,
-  payload?: { source?: string; manualStats?: PublicationManualStats }
-): Promise<{ publication: PublicationItem; analytics: PublishingAnalytics }> {
-  return request(`/api/publishing/publications/${encodeURIComponent(id)}/confirm-zen`, {
-    method: 'POST',
-    body: JSON.stringify(payload || {}),
-  });
-}
-
-export function processDuePublishingQueue(): Promise<{
-  summary: { processed: number; sent: number; failed: number; skippedDryRun: number };
-  analytics: PublishingAnalytics;
-}> {
-  return request('/api/publishing/queue/process-due', { method: 'POST' });
-}
-
-export function updatePublishingSettings(
-  updates: Partial<PublishingSettings>
-): Promise<{
-  settings: PublishingSettings;
-  integrationStatus: TelegramIntegrationStatus;
-}> {
-  return request('/api/publishing/settings', {
-    method: 'PUT',
-    body: JSON.stringify(updates),
-  });
-}
-
-export function testTelegramConnectionApi(): Promise<{
-  ok: boolean;
-  botUsername?: string;
-  channelTitle?: string;
-  channelType?: string;
-  note: string;
-}> {
-  return request('/api/publishing/test-telegram', { method: 'POST' });
-}
-
-export function createPublishingBackupApi(): Promise<{
-  backup: { filename: string; createdAt: string; publicationCount: number };
-}> {
-  return request('/api/publishing/backup', { method: 'POST' });
-}
-
-export function fetchSupabaseSchema(): Promise<{ sql: string }> {
-  return request('/api/publishing/supabase/schema');
-}
-
-export function prepareOrRunSupabaseMigrationApi(executeLiveSync: boolean): Promise<{
-  report: {
-    ready: boolean;
-    backupsCreated: { database: string; research: string; content: string; publishing: string };
-    counts: {
-      stories: number;
-      researchResults: number;
-      contentDrafts: number;
-      publications: number;
-      phrasebook: number;
-      logs: number;
-    };
-    integrityErrors: string[];
-    supabaseConfigured: boolean;
-    liveSyncAttempted: boolean;
-    liveSyncResult?: string;
-  };
-}> {
-  return request('/api/publishing/supabase/prepare-migration', {
-    method: 'POST',
-    body: JSON.stringify({ executeLiveSync }),
-  });
-}
-
-export function fetchIntegrationStatus(): Promise<TelegramIntegrationStatus> {
-  return request<TelegramIntegrationStatus>('/api/integrations/status');
-}
-
-// ============================================================================
-// ЭТАП 5: AUTONOMOUS RESEARCH & PUBLISHING SCHEDULER
-// ============================================================================
-
-export function fetchAutonomousState(): Promise<AutonomousMonitoringSnapshot> {
-  return request<AutonomousMonitoringSnapshot>('/api/autonomous/state');
-}
-
-export function updateAutonomousConfig(
-  updates: Partial<AutonomousSchedulerConfig>
-): Promise<AutonomousMonitoringSnapshot> {
-  return request<AutonomousMonitoringSnapshot>('/api/autonomous/config', {
-    method: 'PUT',
-    body: JSON.stringify(updates),
-  });
-}
-
-export function stopAutonomousScheduler(): Promise<AutonomousMonitoringSnapshot> {
-  return request<AutonomousMonitoringSnapshot>('/api/autonomous/stop', {
-    method: 'POST',
-  });
-}
-
-export function resumeAutonomousScheduler(): Promise<AutonomousMonitoringSnapshot> {
-  return request<AutonomousMonitoringSnapshot>('/api/autonomous/resume', {
-    method: 'POST',
-  });
-}
-
-export function runAutonomousResearchNow(payload?: {
-  collectionOverride?: CollectionType;
-  ignoreStopFlag?: boolean;
-}): Promise<{ log: SchedulerRunLog; snapshot: AutonomousMonitoringSnapshot }> {
-  return request('/api/autonomous/run-research', {
-    method: 'POST',
-    body: JSON.stringify(payload || {}),
-  });
-}
-
-export function runAutonomousProductionNow(payload?: {
-  ignoreStopFlag?: boolean;
-}): Promise<{ log: SchedulerRunLog; snapshot: AutonomousMonitoringSnapshot }> {
-  return request('/api/autonomous/run-production', {
-    method: 'POST',
-    body: JSON.stringify(payload || {}),
-  });
-}
-
-export function runAutonomousPublishNow(payload?: {
-  dryRun?: boolean;
-  ignoreStopFlag?: boolean;
-}): Promise<{ log: SchedulerRunLog; snapshot: AutonomousMonitoringSnapshot }> {
-  return request('/api/autonomous/run-publish', {
-    method: 'POST',
-    body: JSON.stringify(payload || {}),
-  });
-}
-
-export function runAutonomousFullCycleNow(payload?: {
-  dryRunPublish?: boolean;
-  collectionOverride?: CollectionType;
-  ignoreStopFlag?: boolean;
+export async function commitStagedBatch(payload: {
+  acceptedIds: string[];
+  rejectedIds: string[];
+  forceIncludeDuplicates?: boolean;
 }): Promise<{
-  result: {
-    research: SchedulerRunLog;
-    production: SchedulerRunLog;
-    publish: SchedulerRunLog;
-  };
-  snapshot: AutonomousMonitoringSnapshot;
+  stagedBatch: StagedBatch | null;
+  committedCount: number;
+  rejectedCount: number;
+  stats: DatabaseStats;
+  batches: DatabasePayload['batches'];
+  stories: StoryPlot[];
+  backups: BackupSnapshotInfo[];
 }> {
-  return request('/api/autonomous/run-full-cycle', {
+  const res = await fetch('/api/batches/commit', {
     method: 'POST',
-    body: JSON.stringify(payload || {}),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
+  return handleJson(res);
+}
+
+export async function discardStagedBatch(): Promise<{ ok: boolean }> {
+  const res = await fetch('/api/batches/staged', { method: 'DELETE' });
+  return handleJson(res);
+}
+
+export async function addCustomCategory(
+  collection: CollectionType,
+  name: string
+): Promise<{ customCategories: { debate: string[]; romantic: string[] } }> {
+  const res = await fetch('/api/categories', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ collection, name }),
+  });
+  return handleJson(res);
+}
+
+export async function updateSettings(
+  settings: Partial<AppSettings>
+): Promise<{ settings: AppSettings; stats: DatabaseStats }> {
+  const res = await fetch('/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  return handleJson(res);
+}
+
+export async function createBackup(): Promise<{
+  filename: string;
+  backups: BackupSnapshotInfo[];
+}> {
+  const res = await fetch('/api/backup', { method: 'POST' });
+  return handleJson(res);
+}
+
+export async function restoreBackup(filename: string): Promise<DatabasePayload> {
+  const res = await fetch('/api/backup/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename }),
+  });
+  return handleJson(res);
+}
+
+export async function importJsonStories(
+  stories: Array<Partial<StoryPlot>>,
+  skipDuplicates = true
+): Promise<{
+  importedCount: number;
+  skippedDuplicatesCount: number;
+  stats: DatabaseStats;
+  stories: StoryPlot[];
+  backups: BackupSnapshotInfo[];
+}> {
+  const res = await fetch('/api/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stories, skipDuplicates }),
+  });
+  return handleJson(res);
+}
+
+/* ============================================================================
+   STAGE 2: FOREIGN RESEARCH ENGINE CLIENT API
+   ============================================================================ */
+
+export async function fetchResearchStatistics(): Promise<{
+  stats: ResearchStatistics;
+  activeJobId: string | null;
+  geminiConfigured: boolean;
+  backups: BackupSnapshotInfo[];
+}> {
+  const res = await fetch('/api/research/statistics');
+  return handleJson(res);
+}
+
+export async function fetchResearchSources(): Promise<{ sources: ResearchSource[] }> {
+  const res = await fetch('/api/research/sources');
+  return handleJson(res);
+}
+
+export async function addResearchSource(payload: {
+  name: string;
+  url: string;
+  platform?: 'reddit' | 'media' | 'custom';
+  sourceType?: string;
+  language?: string;
+  directions?: CollectionType[];
+  notes?: string;
+}): Promise<{ source: ResearchSource; sources: ResearchSource[] }> {
+  const res = await fetch('/api/research/sources', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleJson(res);
+}
+
+export async function updateResearchSource(
+  id: string,
+  patch: Partial<ResearchSource>
+): Promise<{ source: ResearchSource; sources: ResearchSource[] }> {
+  const res = await fetch(`/api/research/sources/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  return handleJson(res);
+}
+
+export async function deleteResearchSource(
+  id: string
+): Promise<{ deletedId: string; sources: ResearchSource[] }> {
+  const res = await fetch(`/api/research/sources/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  return handleJson(res);
+}
+
+export async function checkResearchSource(
+  id: string
+): Promise<{ source: ResearchSource; sources: ResearchSource[] }> {
+  const res = await fetch(`/api/research/sources/${encodeURIComponent(id)}/check`, {
+    method: 'POST',
+  });
+  return handleJson(res);
+}
+
+export async function checkAllResearchSources(): Promise<{ sources: ResearchSource[] }> {
+  const res = await fetch('/api/research/sources/check-all', {
+    method: 'POST',
+  });
+  return handleJson(res);
+}
+
+export async function startResearchSearch(params: {
+  collection: CollectionType;
+  sourceIds: string[];
+  category: string;
+  sourceLanguage: string;
+  requestedCount: number;
+  depth: ResearchDepth;
+  conversionMode: ResearchConversionMode;
+}): Promise<{ job: ResearchJob }> {
+  const res = await fetch('/api/research/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  return handleJson(res);
+}
+
+export async function fetchResearchJobs(): Promise<{
+  jobs: ResearchJob[];
+  activeJobId: string | null;
+}> {
+  const res = await fetch('/api/research/jobs');
+  return handleJson(res);
+}
+
+export async function fetchResearchJob(id: string): Promise<{ job: ResearchJob }> {
+  const res = await fetch(`/api/research/jobs/${encodeURIComponent(id)}`);
+  return handleJson(res);
+}
+
+export async function cancelResearchJob(id: string): Promise<{ ok: boolean; job?: ResearchJob }> {
+  const res = await fetch(`/api/research/jobs/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+  });
+  return handleJson(res);
+}
+
+export async function fetchResearchResults(): Promise<{ results: ResearchResult[] }> {
+  const res = await fetch('/api/research/results');
+  return handleJson(res);
+}
+
+export async function updateResearchResult(
+  id: string,
+  patch: Partial<ResearchResult>
+): Promise<{ result: ResearchResult }> {
+  const res = await fetch(`/api/research/results/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  return handleJson(res);
+}
+
+export async function analyzeResearchResult(id: string): Promise<{ result: ResearchResult }> {
+  const res = await fetch(`/api/research/results/${encodeURIComponent(id)}/analyze`, {
+    method: 'POST',
+  });
+  return handleJson(res);
+}
+
+export async function generateResearchIdea(id: string): Promise<{ result: ResearchResult }> {
+  const res = await fetch(`/api/research/results/${encodeURIComponent(id)}/generate-idea`, {
+    method: 'POST',
+  });
+  return handleJson(res);
+}
+
+export async function checkResearchDuplicate(id: string): Promise<{ result: ResearchResult }> {
+  const res = await fetch(`/api/research/results/${encodeURIComponent(id)}/check-duplicate`, {
+    method: 'POST',
+  });
+  return handleJson(res);
+}
+
+export async function approveResearchResult(
+  id: string,
+  forceIgnoreDuplicates = false
+): Promise<{
+  result: ResearchResult;
+  story: StoryPlot;
+  dbStats: DatabaseStats;
+}> {
+  const res = await fetch(`/api/research/results/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ forceIgnoreDuplicates }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const err = new Error(data.error || `Ошибка сервера (${res.status})`) as Error & {
+      status?: number;
+      matches?: ResearchDuplicateMatch[];
+      result?: ResearchResult;
+    };
+    err.status = res.status;
+    err.matches = data.matches;
+    err.result = data.result;
+    throw err;
+  }
+  return res.json();
+}
+
+export async function rejectResearchResult(
+  id: string,
+  reason?: string
+): Promise<{ result: ResearchResult }> {
+  const res = await fetch(`/api/research/results/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  });
+  return handleJson(res);
+}
+
+export async function createResearchBackup(): Promise<{
+  filename: string;
+  backups: BackupSnapshotInfo[];
+}> {
+  const res = await fetch('/api/research/backup', { method: 'POST' });
+  return handleJson(res);
+}
+
+/* ============================================================================
+   STAGE 3: STORY GENERATOR + MELO_LOVE VOICE ENGINE CLIENT API
+   ============================================================================ */
+
+export type AvailableStoryItem = StoryPlot & { linkedDraftsCount: number };
+export type ContentDraftListItem = ContentDraft & { sourceStoryTitle?: string };
+
+export async function fetchContentStatistics(): Promise<{
+  stats: ContentStatistics;
+  activeTaskIds: string[];
+  geminiConfigured: boolean;
+  backups: BackupSnapshotInfo[];
+}> {
+  const res = await fetch('/api/content/statistics');
+  return handleJson(res);
+}
+
+export async function fetchAvailableStoriesForContent(params?: {
+  collection?: CollectionType | 'ALL';
+  category?: string;
+  includeDrafted?: boolean;
+  hasResearch?: 'ALL' | 'true' | 'false';
+  search?: string;
+}): Promise<{ stories: AvailableStoryItem[] }> {
+  const q = new URLSearchParams();
+  if (params?.collection && params.collection !== 'ALL') q.set('collection', params.collection);
+  if (params?.category && params.category !== 'ALL') q.set('category', params.category);
+  if (params?.includeDrafted) q.set('includeDrafted', 'true');
+  if (params?.hasResearch && params.hasResearch !== 'ALL') q.set('hasResearch', params.hasResearch);
+  if (params?.search) q.set('search', params.search);
+  const res = await fetch(`/api/content/available-stories?${q.toString()}`);
+  return handleJson(res);
+}
+
+export async function generateContentPublication(params: {
+  sourceStoryId: string;
+  voiceProfileId?: string;
+  voiceSlidersOverride?: Partial<VoiceSliders>;
+  lengthPreset?: ContentLengthPreset;
+  narrativeStructure?: NarrativeStructurePattern | 'auto';
+  autoSaveDraft?: boolean;
+  taskId?: string;
+}): Promise<{ candidate: ContentDraft; savedDraft?: ContentDraft }> {
+  const res = await fetch('/api/content/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  return handleJson(res);
+}
+
+export async function generateContentVariants(params: {
+  sourceStoryId: string;
+  count?: number;
+  voiceProfileId?: string;
+  voiceSlidersOverride?: Partial<VoiceSliders>;
+  lengthPreset?: ContentLengthPreset;
+  taskId?: string;
+}): Promise<{ variants: Array<Omit<ContentDraft, 'id' | 'createdAt' | 'updatedAt' | 'revisionHistory'>> }> {
+  const res = await fetch('/api/content/generate-variants', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  return handleJson(res);
+}
+
+export async function cancelContentTask(taskId: string): Promise<{ ok: boolean }> {
+  const res = await fetch(`/api/content/tasks/${encodeURIComponent(taskId)}/cancel`, {
+    method: 'POST',
+  });
+  return handleJson(res);
+}
+
+export async function rewriteContentPublication(params: {
+  draftId?: string;
+  draftSnapshot?: Partial<ContentDraft>;
+  action: RewriteActionType;
+  customInstruction?: string;
+  taskId?: string;
+}): Promise<{ draft?: ContentDraft; rewritten: Partial<ContentDraft> }> {
+  const res = await fetch('/api/content/rewrite', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  return handleJson(res);
+}
+
+export async function rewriteContentSection(params: {
+  draftId?: string;
+  draftSnapshot?: Partial<ContentDraft>;
+  section: 'opening' | 'ending';
+  customInstruction?: string;
+  taskId?: string;
+}): Promise<{ draft?: ContentDraft; rewritten: Partial<ContentDraft> }> {
+  const res = await fetch('/api/content/rewrite-section', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  return handleJson(res);
+}
+
+export async function checkContentQuality(params: {
+  draftId?: string;
+  sourceStoryId?: string;
+  title?: string;
+  excerpt?: string;
+  body: string;
+  mainTriggerQuestion?: string;
+}): Promise<{ qualityBreakdown: ContentQualityBreakdown; draft?: ContentDraft }> {
+  const res = await fetch('/api/content/quality-check', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  return handleJson(res);
+}
+
+export async function fetchContentDrafts(params?: {
+  collection?: CollectionType | 'ALL';
+  category?: string;
+  status?: ContentDraftStatus | 'ALL';
+  minQuality?: number;
+  hasResearch?: 'ALL' | 'true' | 'false';
+}): Promise<{ drafts: ContentDraftListItem[] }> {
+  const q = new URLSearchParams();
+  if (params?.collection && params.collection !== 'ALL') q.set('collection', params.collection);
+  if (params?.category && params.category !== 'ALL') q.set('category', params.category);
+  if (params?.status && params.status !== 'ALL') q.set('status', params.status);
+  if (params?.minQuality !== undefined) q.set('minQuality', String(params.minQuality));
+  if (params?.hasResearch && params.hasResearch !== 'ALL') q.set('hasResearch', params.hasResearch);
+  const res = await fetch(`/api/content/drafts?${q.toString()}`);
+  return handleJson(res);
+}
+
+export async function fetchContentDraft(id: string): Promise<{
+  draft: ContentDraft;
+  sourceStory: StoryPlot | null;
+}> {
+  const res = await fetch(`/api/content/drafts/${encodeURIComponent(id)}`);
+  return handleJson(res);
+}
+
+export async function saveContentDraft(
+  draft: Partial<ContentDraft>
+): Promise<{ draft: ContentDraft; sourceStory: StoryPlot | null }> {
+  const res = await fetch('/api/content/drafts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(draft),
+  });
+  return handleJson(res);
+}
+
+export async function updateContentDraft(
+  id: string,
+  patch: Partial<ContentDraft>
+): Promise<{ draft: ContentDraft }> {
+  const res = await fetch(`/api/content/drafts/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  return handleJson(res);
+}
+
+export async function updateContentDraftStatus(
+  id: string,
+  status: ContentDraftStatus,
+  rejectionReason?: string
+): Promise<{ draft: ContentDraft; sourceStory: StoryPlot | null }> {
+  const res = await fetch(`/api/content/drafts/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, rejectionReason }),
+  });
+  return handleJson(res);
+}
+
+export async function deleteContentDraft(
+  id: string
+): Promise<{ deletedId: string; sourceStory: StoryPlot | null }> {
+  const res = await fetch(`/api/content/drafts/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  return handleJson(res);
+}
+
+export async function fetchContentVersions(id: string): Promise<{
+  versions: ContentRevisionSnapshot[];
+  currentDraft: ContentDraft;
+}> {
+  const res = await fetch(`/api/content/drafts/${encodeURIComponent(id)}/versions`);
+  return handleJson(res);
+}
+
+export async function restoreContentVersion(
+  id: string,
+  versionId: string
+): Promise<{ draft: ContentDraft }> {
+  const res = await fetch(`/api/content/drafts/${encodeURIComponent(id)}/restore-version`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ versionId }),
+  });
+  return handleJson(res);
+}
+
+export async function fetchVoiceConfig(): Promise<{ voiceConfig: VoiceEngineConfig }> {
+  const res = await fetch('/api/content/voice');
+  return handleJson(res);
+}
+
+export async function saveVoiceConfigApi(
+  config: Partial<VoiceEngineConfig>
+): Promise<{ voiceConfig: VoiceEngineConfig }> {
+  const res = await fetch('/api/content/voice', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  return handleJson(res);
+}
+
+export async function fetchPhrasebook(): Promise<{ phrasebook: PhrasebookEntry[] }> {
+  const res = await fetch('/api/content/phrasebook');
+  return handleJson(res);
+}
+
+export async function addPhrasebookEntry(payload: {
+  phrase: string;
+  collections: CollectionType[];
+  tone: PhrasebookTone;
+  maxFrequencyPer10: number;
+  weight: number;
+  notes: string;
+}): Promise<{ entry: PhrasebookEntry; phrasebook: PhrasebookEntry[] }> {
+  const res = await fetch('/api/content/phrasebook', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleJson(res);
+}
+
+export async function updatePhrasebookEntry(
+  id: string,
+  patch: Partial<PhrasebookEntry>
+): Promise<{ entry: PhrasebookEntry; phrasebook: PhrasebookEntry[] }> {
+  const res = await fetch(`/api/content/phrasebook/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  return handleJson(res);
+}
+
+export async function deletePhrasebookEntry(
+  id: string
+): Promise<{ deletedId: string; phrasebook: PhrasebookEntry[] }> {
+  const res = await fetch(`/api/content/phrasebook/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  return handleJson(res);
+}
+
+export async function importContentJson(
+  payload: unknown
+): Promise<{
+  importedCount: number;
+  rejectedErrors: string[];
+  drafts: ContentDraft[];
+}> {
+  const res = await fetch('/api/content/import/json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleJson(res);
+}
+
+export async function createContentBackup(): Promise<{
+  filename: string;
+  backups: BackupSnapshotInfo[];
+}> {
+  const res = await fetch('/api/content/backup', { method: 'POST' });
+  return handleJson(res);
 }
 
 

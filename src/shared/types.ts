@@ -1,226 +1,184 @@
 export type CollectionType = 'debate' | 'romantic';
+
 export type OriginType = 'external' | 'original';
+
 export type VerificationStatus = 'pending' | 'approved' | 'needs_revision' | 'rejected';
+
 export type UsageStatus = 'unused' | 'drafted' | 'published' | 'archived';
 
-export type NavSection =
-  | 'overview'
-  | 'debate'
-  | 'romantic'
-  | 'categories'
-  | 'sources'
-  | 'uniqueness'
-  | 'quality'
-  | 'research'
-  | 'generator'
-  | 'studio'
-  | 'scheduler'
-  | 'export'
-  | 'settings';
-
-export interface StoryQualityBreakdown {
+export interface QualityMetrics {
+  overall: number;
   originality: number;
   realism: number;
-  emotionalDepth: number;
-  engagement: number;
+  emotionalExpressiveness: number;
+  interest: number;
   discussionPotential: number;
   specificity: number;
-  variability: number;
+  plotVariability: number;
+  // Debate-specific
   ambiguity?: number;
-  bothSidesStrength?: number;
-  contradictionPower?: number;
-  warmth?: number;
+  bothSidesArgumentation?: number;
+  contradictionStrength?: number;
+  // Romantic-specific
+  emotionalWarmth?: number;
   relatability?: number;
   smallDetailPower?: number;
   naturalness?: number;
-}
-
-export interface StoryQuality {
-  overall: number;
-  breakdown: StoryQualityBreakdown;
   editorialNote: string;
 }
 
 export interface SimilarityMatch {
-  storyId: string;
-  title: string;
-  collection: CollectionType;
-  score: number;
+  matchedId: string;
+  matchedTitle: string;
+  matchedShortDescription: string;
+  matchedCollection: CollectionType;
+  matchedCategory: string;
+  similarityScore: number; // 0 to 100
+  sharedKeywords: string[];
   reason: string;
 }
 
 export interface StoryPlot {
-  id: string;
-  collection: CollectionType;
-  category: string;
-  subcategory: string;
-  title: string;
-  shortDescription: string;
-  fullPlot: string;
-  participants: string;
-  setting: string;
-  coreConflictOrAction: string;
-  sideAPosition: string;
-  sideBPosition: string;
-  emotionalMechanism: string;
-  hiddenExpectation: string;
-  unexpectedNuance: string;
-  possibleTwist: string;
-  mainTriggerQuestion: string;
-  additionalQuestions: string[];
-  keywords: string[];
-  ideaSource: string;
-  sourceUrl: string;
-  originType: OriginType;
-  createdAt: string;
-  verificationStatus: VerificationStatus;
-  usageStatus: UsageStatus;
-  semanticFingerprint: string;
+  // 26 обязательных структурированных полей
+  id: string; // 1. ID
+  collection: CollectionType; // 2. Коллекция
+  category: string; // 3. Категория
+  subcategory: string; // 4. Подкатегория
+  title: string; // 5. Название сюжета
+  shortDescription: string; // 6. Краткое описание
+  fullPlot: string; // 7. Полная сюжетная основа
+  participants: string; // 8. Участники
+  setting: string; // 9. Место действия
+  coreConflictOrAction: string; // 10. Главный конфликт или действие
+  sideAPosition: string; // 11. Позиция первой стороны (или инициатора в романтике)
+  sideBPosition: string; // 12. Позиция второй стороны (или реакция партнёра в романтике)
+  emotionalMechanism: string; // 13. Эмоциональный механизм
+  hiddenExpectation: string; // 14. Скрытое ожидание
+  unexpectedNuance: string; // 15. Неожиданный нюанс
+  possibleTwist: string; // 16. Возможный поворот / финал
+  mainTriggerQuestion: string; // 17. Основной триггерный вопрос
+  additionalQuestions: string[]; // 18. Дополнительные вопросы
+  keywords: string[]; // 19. Ключевые слова
+  ideaSource: string; // 20. Источник идеи
+  sourceUrl: string; // 21. URL источника
+  originType: OriginType; // 22. Тип происхождения
+  createdAt: string; // 23. Дата создания
+  verificationStatus: VerificationStatus; // 24. Статус проверки
+  usageStatus: UsageStatus; // 25. Статус использования
+  semanticFingerprint: string; // 26. Семантический отпечаток
+
+  // Дополнительные аналитические поля для контроля уникальности и качества
   mainTheme: string;
   plotMechanic: string;
   uniqueDetails: string;
-  sourceAnalysisNote: string;
-  batchNumber: number;
+  sourceAnalysisNote?: string;
   researchId?: string;
   researchNotes?: string;
-  quality: StoryQuality;
-  similarityMatches: SimilarityMatch[];
-  duplicateFlag: boolean;
+  batchNumber: number;
+  quality: QualityMetrics;
+  similarityMatches?: SimilarityMatch[];
+  duplicateFlag?: boolean;
+  updatedAt?: string;
 }
 
 export interface BatchRecord {
   batchNumber: number;
   collection: CollectionType;
-  categoryFocus: string;
-  searchMode: 'original' | 'web_search';
+  targetCategory: string;
   requestedCount: number;
   generatedCount: number;
-  approvedCount: number;
+  acceptedCount: number;
+  flaggedDuplicatesCount: number;
   rejectedCount: number;
+  researchMode: 'original' | 'external_search';
   createdAt: string;
-  committedAt?: string;
-  note?: string;
-}
-
-export interface StagedStoryCandidate extends StoryPlot {
-  candidateId: string;
-  decision: 'pending' | 'approved' | 'needs_revision' | 'rejected';
-}
-
-export interface PendingBatch {
-  batchNumber: number;
-  collection: CollectionType;
-  categoryFocus: string;
-  searchMode: 'original' | 'web_search';
-  createdAt: string;
-  candidates: StagedStoryCandidate[];
+  notes: string;
 }
 
 export interface AppSettings {
-  targetTotal: number;
-  targetDebate: number;
-  targetRomantic: number;
-  similarityThreshold: number;
-  minQualityScore: number;
-  defaultBatchSize: 10 | 25 | 35 | 50;
+  targetTotalStories: number; // 3000
+  targetDebateStories: number; // 1500
+  targetRomanticStories: number; // 1500
+  defaultBatchSize: number; // 25
+  similarityThreshold: number; // 42 (%)
+  minimumApprovalScore: number; // 70
+  storageMode: 'local_disk'; // Supabase-ready adapter pattern
+  supabaseConfigured: boolean;
 }
 
-export interface CustomCategory {
-  id: string;
-  collection: CollectionType;
-  name: string;
-  subcategories: string[];
-  createdAt: string;
-}
-
-export interface BackupEntry {
-  filename: string;
-  createdAt: string;
-  sizeBytes: number;
-  storyCount: number;
+export interface DatabaseState {
+  version: number;
+  lastUpdated: string;
+  stories: StoryPlot[];
+  batches: BatchRecord[];
+  customCategories: {
+    debate: string[];
+    romantic: string[];
+  };
+  settings: AppSettings;
 }
 
 export interface DatabaseStats {
   total: number;
-  debateCount: number;
-  romanticCount: number;
-  approvedCount: number;
-  pendingCount: number;
-  needsRevisionCount: number;
-  rejectedCount: number;
-  unusedCount: number;
-  draftedCount: number;
-  publishedCount: number;
-  archivedCount: number;
-  duplicatesCount: number;
-  externalCount: number;
-  originalCount: number;
+  debateTotal: number;
+  romanticTotal: number;
+  approved: number;
+  pending: number;
+  needsRevision: number;
+  rejected: number;
+  duplicatesDetected: number;
+  externalOriginCount: number;
+  originalOriginCount: number;
   averageQuality: number;
   progressPercent: number;
+  debateProgressPercent: number;
+  romanticProgressPercent: number;
 }
 
-export interface DatabaseFile {
-  version: string;
-  updatedAt: string;
-  stories: StoryPlot[];
-  batches: BatchRecord[];
-  customCategories: CustomCategory[];
-  settings: AppSettings;
-}
+export type NavSection =
+  | 'overview'
+  | 'debate'
+  | 'romantic'
+  | 'research'
+  | 'generator'
+  | 'categories'
+  | 'sources'
+  | 'uniqueness'
+  | 'quality'
+  | 'export'
+  | 'settings';
 
-export interface DatabaseSnapshotResponse {
-  database: DatabaseFile;
-  stats: DatabaseStats;
-  pendingBatch: PendingBatch | null;
-  backups: BackupEntry[];
-  storageMode: 'local_disk';
-}
+/* ============================================================================
+   STAGE 2: FOREIGN RESEARCH ENGINE TYPES
+   ============================================================================ */
 
-// ============================================================================
-// ЭТАП 2: FOREIGN RESEARCH ENGINE
-// ============================================================================
+export type ResearchPlatformType = 'reddit' | 'media' | 'custom';
 
-export type ResearchSourceType = 'reddit' | 'media' | 'blog' | 'community';
-export type ResearchSourceStatus = 'available' | 'restricted' | 'unavailable' | 'unchecked';
+export type SourceAvailabilityStatus =
+  | 'unchecked'
+  | 'available'
+  | 'restricted'
+  | 'unavailable';
 
 export interface ResearchSource {
   id: string;
   name: string;
   url: string;
-  rssUrl?: string;
-  sourceType: ResearchSourceType;
-  defaultCollection: CollectionType | 'both';
-  language: string;
+  domain: string;
+  platform: ResearchPlatformType;
+  sourceType: string; // e.g. 'Reddit Community', 'Editorial Column', 'Digital Magazine'
+  language: string; // 'en' | 'other'
+  directions: CollectionType[];
   enabled: boolean;
-  isSystem: boolean;
-  status: ResearchSourceStatus;
+  isCustom: boolean;
+  availabilityStatus: SourceAvailabilityStatus;
+  availabilityMessage: string;
   robotsAllowed: boolean | null;
-  lastHttpStatus?: number | null;
-  lastError?: string;
-  foundCount: number;
-  lastCheckedAt?: string;
-}
-
-export type ResearchJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-
-export interface ResearchJob {
-  id: string;
-  collection: CollectionType;
-  sourceIds: string[];
-  categoryFocus: string;
-  sourceLanguage: string;
-  requestedCount: number;
-  analysisDepth: 'standard' | 'deep';
-  transformMode: 'analyze_only' | 'analyze_and_generate';
-  status: ResearchJobStatus;
-  methodUsed: 'direct_public_feed' | 'google_search_grounding' | 'hybrid';
-  processedCount: number;
-  foundCount: number;
-  failedCount: number;
-  startedAt: string;
-  finishedAt?: string;
-  error?: string;
-  logs: string[];
+  lastCheckedAt: string | null;
+  itemsFoundCount: number;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ResearchQueueStatus =
@@ -232,31 +190,41 @@ export type ResearchQueueStatus =
   | 'approved_for_database'
   | 'rejected';
 
-export interface ResearchQualityScore {
-  overall: number;
-  tierLabel: 'Отличная идея' | 'Хорошая идея' | 'Требует проверки' | 'Рекомендуется доработка или отклонение';
+export type ResearchAnalysisStatus = 'pending' | 'completed' | 'failed';
+export type SourceReliabilityStatus = 'verified_url' | 'search_grounded' | 'direct_feed' | 'unverified';
+export type ResearchDepth = 'standard' | 'deep';
+export type ResearchConversionMode = 'analysis_only' | 'analysis_and_idea';
+
+export interface ResearchQualityBreakdown {
+  overall: number; // 0-100
+  originality: number;
+  realism: number;
+  specificity: number;
+  emotionalExpressiveness: number;
+  readerInterest: number;
+  diversity: number;
+  discussionPotential: number;
+  mechanicQuality: number;
+  // Debate-specific
+  ambiguity?: number;
+  bothSidesArgumentation?: number;
+  debatePotential?: number;
+  // Romantic-specific
+  warmth?: number;
+  naturalness?: number;
+  emotionalDetailPower?: number;
+  relatability?: number;
+  nonSaccharine?: number;
+  tierLabel: string; // e.g. 'Отличная идея', 'Хорошая идея', 'Требует проверки', 'Рекомендуется доработка'
   explanation: string;
-  breakdown: {
-    originality: number;
-    realism: number;
-    specificity: number;
-    emotionalExpressiveness: number;
-    readerInterest: number;
-    diversity: number;
-    discussionPotential: number;
-    mechanicQuality: number;
-    ambiguity?: number;
-    bothSidesArgument?: number;
-    debatePotential?: number;
-    warmth?: number;
-    naturalness?: number;
-    detailStrength?: number;
-    relatability?: number;
-    antiSaccharine?: number;
-  };
 }
 
-export interface ResearchGeneratedPlotDraft {
+export interface ResearchDuplicateMatch extends SimilarityMatch {
+  matchScope: 'story_database' | 'research_queue' | 'current_batch';
+}
+
+export interface ResearchIdeaDraft {
+  collection: CollectionType;
   category: string;
   subcategory: string;
   title: string;
@@ -277,6 +245,10 @@ export interface ResearchGeneratedPlotDraft {
   mainTheme: string;
   plotMechanic: string;
   uniqueDetails: string;
+  originType: OriginType;
+  sourceUrl: string;
+  ideaSource: string;
+  researchNotes: string;
 }
 
 export interface ResearchResult {
@@ -286,19 +258,23 @@ export interface ResearchResult {
   sourceName: string;
   sourceUrl: string;
   sourceTitle: string;
-  sourceAuthor: string;
-  sourceDate: string;
+  sourceAuthor: string; // 'unknown' if not reliably known
+  sourceDate: string; // 'unknown' if not reliably known
   researchDate: string;
-  sourceType: ResearchSourceType;
+  sourceType: string;
   collection: CollectionType;
+  targetCategory: string;
   originalLanguage: string;
-  sourceExcerpt: string;
+  // Facts from source vs Model analysis
   sourceSummary: string;
   mainSituation: string;
   participants: string;
   relationshipType: string;
   mainConflict: string;
-  positionsOfParticipants: string;
+  positionsOfParticipants: {
+    sideA: string;
+    sideB: string;
+  };
   emotionalMechanism: string;
   hiddenExpectation: string;
   unexpectedDetail: string;
@@ -307,47 +283,85 @@ export interface ResearchResult {
   storyMechanic: string;
   keywords: string[];
   researchNotes: string;
-  sourceReliability: 'verified_direct' | 'verified_grounding' | 'unverified';
-  analysisStatus: 'pending' | 'completed' | 'failed';
-  originalityAssessment: string;
+  sourceReliability: SourceReliabilityStatus;
+  analysisStatus: ResearchAnalysisStatus;
+  originalityAssessment: number; // 0-100
+  // Queue & Integration
   queueStatus: ResearchQueueStatus;
-  generatedPlot: ResearchGeneratedPlotDraft | null;
-  quality: ResearchQualityScore | null;
-  similarityMatches: SimilarityMatch[];
+  generatedIdea: ResearchIdeaDraft | null;
+  qualityBreakdown: ResearchQualityBreakdown;
+  duplicateMatches: ResearchDuplicateMatch[];
   duplicateFlag: boolean;
-  approvedStoryId?: string;
+  savedStoryId?: string;
+  rejectionReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ResearchJobStatus = 'running' | 'completed' | 'cancelled' | 'failed' | 'interrupted';
+
+export interface ResearchJobLogEntry {
+  timestamp: string;
+  level: 'info' | 'warn' | 'error';
+  message: string;
+}
+
+export interface ResearchJob {
+  id: string;
+  collection: CollectionType;
+  sourceIds: string[];
+  sourceNames: string[];
+  category: string;
+  sourceLanguage: string;
+  requestedCount: number;
+  processedCount: number;
+  foundCount: number;
+  ideasGeneratedCount: number;
+  duplicatesDetectedCount: number;
+  depth: ResearchDepth;
+  conversionMode: ResearchConversionMode;
+  status: ResearchJobStatus;
+  searchMethodUsed: 'google_search_grounding' | 'direct_public_feed' | 'hybrid' | 'unavailable';
+  errorMessage?: string;
+  logs: ResearchJobLogEntry[];
+  resultIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
 }
 
 export interface ResearchStatistics {
   totalJobs: number;
-  activeJobs: number;
-  totalResults: number;
-  sourcesChecked: number;
-  sourcesAvailable: number;
-  sourcesRestricted: number;
-  sourcesUnavailable: number;
-  ideasGenerated: number;
+  completedJobs: number;
+  totalMaterialsFound: number;
+  processedSourcesCount: number;
+  enabledSourcesCount: number;
+  availableSourcesCount: number;
+  originalIdeasCount: number;
   awaitingReviewCount: number;
-  approvedToDatabaseCount: number;
+  approvedForDatabaseCount: number;
   rejectedCount: number;
   duplicatesDetectedCount: number;
-  debateResultsCount: number;
-  romanticResultsCount: number;
+  debateCount: number;
+  romanticCount: number;
+  debateApprovedCount: number;
+  romanticApprovedCount: number;
+  averageResearchQuality: number;
 }
 
-// ============================================================================
-// ЭТАП 3: STORY GENERATOR + MELO_LOVE VOICE ENGINE
-// ============================================================================
+/* ============================================================================
+   STAGE 3: STORY GENERATOR + MELO_LOVE VOICE ENGINE TYPES
+   ============================================================================ */
 
-export type NarrativeStartStyle =
-  | 'action_start'
-  | 'detail_start'
-  | 'dialogue_start'
-  | 'emotion_start'
-  | 'contradiction_start'
-  | 'observer_start'
-  | 'outcome_first'
-  | 'gradual_reveal';
+export type VoicePresetId =
+  | 'melo_love_standard'
+  | 'more_ironic'
+  | 'more_emotional'
+  | 'calm_conversational'
+  | 'author_experiment'
+  | string;
+
+export type SentenceLengthMode = 'short' | 'mixed' | 'free';
 
 export type ContentLengthPreset = 'short' | 'standard' | 'expanded' | 'longread';
 
@@ -360,63 +374,71 @@ export type ContentDraftStatus =
   | 'rejected'
   | 'archived';
 
-export type RewriteMode =
-  | 'more_lively'
-  | 'more_conversational'
-  | 'sharpen_hook'
-  | 'softer_romantic'
-  | 'sharper_debate'
-  | 'shorten'
-  | 'expand'
-  | 'change_opening'
-  | 'change_ending'
-  | 'remove_ai_feel';
+export type NarrativeStructurePattern =
+  | 'action_start'
+  | 'detail_start'
+  | 'dialogue_start'
+  | 'emotion_start'
+  | 'contradiction_start'
+  | 'observer_start'
+  | 'outcome_first'
+  | 'gradual_reveal';
 
-export type ContentExportMode = 'draft_only' | 'with_source' | 'story_only';
+export type PhrasebookTone =
+  | 'ironic'
+  | 'intrigued'
+  | 'skeptical'
+  | 'warm'
+  | 'observational'
+  | 'neutral';
 
-export interface VoiceProfileSettings {
-  irony: number;
-  conversational: number;
-  emotionality: number;
-  provocativeness: number;
-  phraseDensity: number;
-  sentenceLength: number;
-  dramaLevel: number;
+export interface VoiceSliders {
+  irony: number; // 0-10
+  conversational: number; // 0-10
+  emotionality: number; // 0-10
+  provocativeness: number; // 0-10
+  phraseDensity: number; // 0-10
+  sentenceLength: SentenceLengthMode;
+  dramaLevel: number; // 0-10
 }
 
-export interface VoicePreset {
-  id: string;
+export interface VoiceProfileSettings extends VoiceSliders {
+  id: VoicePresetId;
   name: string;
   description: string;
-  debate: VoiceProfileSettings;
-  romantic: VoiceProfileSettings;
-  isSystem: boolean;
+  collectionHint?: CollectionType | 'both';
+  isCustom: boolean;
 }
 
-export interface VoiceConfig {
-  activePresetId: string;
-  debate: VoiceProfileSettings;
-  romantic: VoiceProfileSettings;
-  customPresets: VoicePreset[];
-  minPublishQualityScore: number;
+export interface VoiceEngineConfig {
+  debateProfileId: VoicePresetId;
+  romanticProfileId: VoicePresetId;
+  rubricSettings: {
+    debate: VoiceSliders;
+    romantic: VoiceSliders;
+  };
+  profiles: VoiceProfileSettings[];
   updatedAt: string;
 }
 
 export interface PhrasebookEntry {
   id: string;
   phrase: string;
-  meaningNote: string;
-  collectionScope: CollectionType | 'both';
-  toneTag: string;
-  weight: number;
+  collections: CollectionType[];
+  tone: PhrasebookTone;
   maxFrequencyPer10: number;
+  weight: number; // 1-10 priority
   banned: boolean;
-  recentUsageCount: number;
-  totalUsageCount: number;
+  usageCount: number;
+  recentUsageCount: number; // count in last 10 publications
+  isOverused: boolean;
+  isCustom: boolean;
+  notes: string;
   createdAt: string;
+  updatedAt: string;
 }
 
-export interface ContentQualityPenalties {
+export interface ContentQualityChecks {
   hasMeaninglessRepetition: boolean;
   soundsLikeAiTemplate: boolean;
   artificialColloquialism: boolean;
@@ -426,346 +448,108 @@ export interface ContentQualityPenalties {
   artificialEnding: boolean;
   unsubstantiatedClaims: boolean;
   verbatimCopy: boolean;
-  details: string[];
 }
 
-export interface ContentQualityScore {
-  overall: number;
-  breakdown: {
-    hookStrength: number;
-    languageNaturalness: number;
-    emotionalImpact: number;
-    plotDepth: number;
-    narrativeUniqueness: number;
-    voiceRecognition: number;
-    endingQuality: number;
-    sourceFidelity: number;
-  };
-  penalties: ContentQualityPenalties;
-  editorialComment: string;
-  passedThreshold: boolean;
+export interface ContentQualityBreakdown {
+  hookStrength: number; // max 15
+  languageNaturalness: number; // max 15
+  emotionalImpact: number; // max 15
+  plotDepth: number; // max 15
+  narrativeUniqueness: number; // max 15
+  voiceRecognition: number; // max 10
+  endingQuality: number; // max 10
+  sourceFidelity: number; // max 5
+  overall: number; // 0-100 sum
+  tierLabel: string;
+  checks: ContentQualityChecks;
+  warnings: string[];
+  editorialNotes: string;
 }
 
-export interface ContentRevision {
-  version: number;
-  title: string;
-  body: string;
-  triggerQuestion: string;
-  qualityScore: number;
-  reason: string;
+export interface ContentRevisionSnapshot {
+  versionId: string;
+  versionNumber: number;
   createdAt: string;
+  actionLabel: string;
+  title: string;
+  alternativeTitles: string[];
+  excerpt: string;
+  body: string;
+  mainTriggerQuestion: string;
+  voiceProfile: VoicePresetId;
+  voiceSettings: VoiceSliders;
+  narrativeStructure: NarrativeStructurePattern;
+  lengthPreset: ContentLengthPreset;
+  qualityScore: number;
+  qualityBreakdown: ContentQualityBreakdown;
+  editorialNotes: string;
 }
 
 export interface ContentDraft {
-  contentId: string;
+  id: string; // ML-P-D-000001 | ML-P-R-000001
   sourceStoryId: string;
-  collection: CollectionType;
-  category: string;
-  subcategory: string;
-  title: string;
-  subtitle: string;
-  body: string;
-  triggerQuestion: string;
-  wordCount: number;
-  lengthPreset: ContentLengthPreset;
-  narrativeStyle: NarrativeStartStyle;
-  voicePresetId: string;
-  usedPhraseIds: string[];
-  usedPhrases: string[];
-  openingPattern: string;
-  endingPattern: string;
-  status: ContentDraftStatus;
-  quality: ContentQualityScore;
-  autoRefined: boolean;
-  completenessAuditNote: string;
-  variantGroupId?: string;
-  variantIndex?: number;
-  researchId?: string;
-  sourceUrl?: string;
-  originType: OriginType;
-  revisionHistory: ContentRevision[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ContentMetrics {
-  availableStoriesCount: number;
-  availableDebateCount: number;
-  availableRomanticCount: number;
-  totalDrafts: number;
-  readyForReviewCount: number;
-  needsRevisionCount: number;
-  approvedCount: number;
-  averageQualityScore: number;
-  activePhrasesCount: number;
-  overusedPhrasesCount: number;
-}
-
-// ============================================================================
-// ЭТАП 4: CONTENT STUDIO + PUBLISHING INFRASTRUCTURE (TELEGRAM & ДЗЕН)
-// ============================================================================
-
-export type PublishingQueueStatus =
-  | 'draft'
-  | 'ready'
-  | 'scheduled'
-  | 'sending'
-  | 'sent_to_telegram'
-  | 'zen_delivery_unconfirmed'
-  | 'zen_delivery_verified'
-  | 'failed';
-
-export interface EditorialCheckReport {
-  spellingOk: boolean;
-  noRepetitionOk: boolean;
-  logicOk: boolean;
-  meloStyleOk: boolean;
-  headlineOk: boolean;
-  hashtagsOk: boolean;
-  notes: string[];
-}
-
-export interface PublicationRevision {
-  version: number;
-  title: string;
-  teaser: string;
-  body: string;
-  closingQuestion: string;
-  hashtags: string[];
-  reason: string;
-  createdAt: string;
-}
-
-export interface PublicationManualStats {
-  views?: number;
-  reads?: number;
-  reactions?: number;
-  updatedAt?: string;
-}
-
-export interface PublicationItem {
-  publicationId: string;
-  sourceDraftId?: string;
-  sourceStoryId: string;
-  researchId?: string;
-  sourceUrl?: string;
   collection: CollectionType;
   category: string;
   subcategory: string;
   title: string;
   alternativeTitles: string[];
-  teaser: string;
+  excerpt: string;
   body: string;
-  closingQuestion: string;
-  hashtags: string[];
-  hasImageAttachment: boolean;
-  totalChars: number;
-  remainingChars: number;
-  exceedsTelegramLimit: boolean;
-  firstSentenceLength: number;
-  seoNotes: string;
-  seoKeywords: string[];
-  editorialChecks: EditorialCheckReport;
-  status: PublishingQueueStatus;
-  idempotencyKey: string;
-  telegramMessageId?: number;
-  telegramChatId?: string;
-  scheduledAt?: string;
-  sentToTelegramAt?: string;
-  zenConfirmedAt?: string;
-  zenConfirmedSource?: string;
-  error?: string;
-  manualStats?: PublicationManualStats;
-  revisionHistory: PublicationRevision[];
+  mainTriggerQuestion: string;
+  voiceProfile: VoicePresetId;
+  voiceSettings: VoiceSliders;
+  narrativeStructure: NarrativeStructurePattern;
+  contentLength: number; // word count
+  lengthPreset: ContentLengthPreset;
+  qualityScore: number;
+  qualityBreakdown: ContentQualityBreakdown;
+  editorialNotes: string;
+  generationModel: string;
+  generationPromptVersion: string;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface PublishingSettings {
-  autoSendEnabled: boolean;
-  dryRunMode: boolean;
-  telegramChannelRef: string;
-  dzenChannelName: string;
-  dzenSyncMode: 'automatic' | 'manual_forward';
-  utmSource: string;
-  safeTelegramCharLimit: number;
-  updatedAt: string;
-}
-
-export interface TelegramIntegrationStatus {
-  hasBotTokenConfigured: boolean;
-  hasChannelConfigured: boolean;
-  hasGeminiConfigured: boolean;
-  hasGeminiPrimaryConfigured?: boolean;
-  hasGigaChatConfigured?: boolean;
-  hasZaiConfigured?: boolean;
-  hasSupabaseConfigured: boolean;
-  autoSendEnabled: boolean;
-  dryRunMode: boolean;
-}
-
-export interface PublishingLogEntry {
-  id: string;
-  publicationId: string;
-  action: string;
-  status: string;
-  detail: string;
-  createdAt: string;
-}
-
-export interface PublishingAnalytics {
-  totalPublications: number;
-  draftCount: number;
-  readyCount: number;
-  scheduledCount: number;
-  sentToTelegramCount: number;
-  zenUnconfirmedCount: number;
-  zenVerifiedCount: number;
-  failedCount: number;
-  totalManualViews: number;
-  totalManualReads: number;
-  totalManualReactions: number;
-  hasExternalStats: boolean;
-}
-
-// ============================================================================
-// ЭТАП 5: AUTONOMOUS RESEARCH, CONTENT PRODUCTION & PUBLISHING SCHEDULER
-// ============================================================================
-
-export type ProcessedMaterialStatus =
-  | 'discovered'
-  | 'duplicate'
-  | 'approved'
-  | 'generating'
-  | 'generated'
-  | 'quality_check'
-  | 'ready'
-  | 'sending'
-  | 'published_to_telegram'
-  | 'failed';
-
-export interface ProcessedMaterialEntry {
-  id: string;
-  url: string;
-  normalizedUrl: string;
-  sourceId: string;
-  sourceName: string;
-  title: string;
-  normalizedTitle: string;
-  collection: CollectionType;
-  publishedAt?: string;
-  discoveredAt: string;
-  contentFingerprint: string;
-  status: ProcessedMaterialStatus;
-  batchId?: string;
+  status: ContentDraftStatus;
+  revisionHistory: ContentRevisionSnapshot[];
+  // Extra traceability & diversity metadata
+  sourceUrl: string;
   researchId?: string;
-  storyId?: string;
-  contentId?: string;
-  publicationId?: string;
-  telegramMessageId?: number;
-  error?: string;
-  updatedAt: string;
+  sourceOriginType: OriginType;
+  keywords: string[];
+  usedPhrases: string[];
+  openingPattern: string;
+  endingPattern: string;
+  semanticFingerprint: string;
+  variantIndex: number;
+  rejectionReason?: string;
 }
 
-export interface ResearchBatchRecord {
-  batchId: string;
-  collection: CollectionType;
-  status: 'in_progress' | 'completed' | 'paused';
-  targetCount: number;
-  processedUrls: string[];
-  discoveredCount: number;
-  newUniqueCount: number;
-  duplicateCount: number;
-  analyzedCount: number;
-  pendingAnalysisCount: number;
-  failedCount: number;
-  startedAt: string;
-  finishedAt?: string;
-  lastError?: string;
-}
+export type RewriteActionType =
+  | 'rewrite_opening'
+  | 'rewrite_ending'
+  | 'more_ironic'
+  | 'more_emotional'
+  | 'less_pathos'
+  | 'simpler'
+  | 'more_natural'
+  | 'shorter'
+  | 'longer'
+  | 'custom';
 
-export interface AutonomousSchedulerConfig {
-  researchEnabled: boolean;
-  autoPublishEnabled: boolean;
-  researchIntervalHours: number;
-  researchBatchSize: number;
-  productionBatchSize: number;
-  publishMinIntervalHours: number;
-  maxPublishesPerDay: number;
-  collectionsRotation: 'alternate' | 'debate' | 'romantic';
-  stopRequested: boolean;
-  githubRepo?: string;
-  updatedAt: string;
+export interface ContentStatistics {
+  approvedStoriesCount: number;
+  unusedApprovedStoriesCount: number;
+  totalDraftsCount: number;
+  draftsInProgressCount: number;
+  readyForReviewCount: number;
+  needsRevisionCount: number;
+  approvedPublicationsCount: number;
+  rejectedCount: number;
+  averageQualityScore: number;
+  debateDraftsCount: number;
+  romanticDraftsCount: number;
+  debateApprovedStoriesCount: number;
+  romanticApprovedStoriesCount: number;
+  activePhrasebookCount: number;
+  overusedPhrasebookCount: number;
 }
-
-export interface SchedulerRunLog {
-  runId: string;
-  kind: 'research' | 'production' | 'publish' | 'full_cycle';
-  mode: 'github_actions' | 'manual' | 'server';
-  startedAt: string;
-  finishedAt: string;
-  ok: boolean;
-  discovered: number;
-  uniqueAdded: number;
-  duplicates: number;
-  analyzed: number;
-  pendingAnalysis: number;
-  storiesApproved: number;
-  publicationsCreated: number;
-  publishedToTelegram: number;
-  summary: string;
-  error?: string;
-}
-
-export interface AutonomousSchedulerState {
-  config: AutonomousSchedulerConfig;
-  activeBatchId?: string;
-  batches: ResearchBatchRecord[];
-  lastCollectionUsed?: CollectionType;
-  lastResearchRunAt?: string;
-  nextScheduledResearchAt?: string;
-  lastResearchError?: string;
-  lastProductionRunAt?: string;
-  lastProductionError?: string;
-  lastPublishRunAt?: string;
-  nextScheduledPublishAt?: string;
-  lastSuccessfulTelegramAt?: string;
-  lastPublishError?: string;
-  publishedTodayDate: string;
-  publishedTodayCount: number;
-  totalDiscoveredMaterials: number;
-  totalUniqueStoriesSaved: number;
-  totalPublicationsCreated: number;
-  totalPublishedToTelegram: number;
-  runHistory: SchedulerRunLog[];
-}
-
-export interface GitHubWorkflowRunSummary {
-  configured: boolean;
-  repo?: string;
-  available: boolean;
-  runs: Array<{
-    id: number;
-    name: string;
-    status: string;
-    conclusion: string | null;
-    event: string;
-    createdAt: string;
-    updatedAt: string;
-    htmlUrl: string;
-  }>;
-  note: string;
-}
-
-export interface AutonomousMonitoringSnapshot {
-  state: AutonomousSchedulerState;
-  registryCount: number;
-  registryByStatus: Record<ProcessedMaterialStatus, number>;
-  recentRegistry: ProcessedMaterialEntry[];
-  readyToPublishCount: number;
-  pendingAnalysisCount: number;
-  isCycleRunning: boolean;
-  githubActions: GitHubWorkflowRunSummary;
-}
-
 

@@ -1,183 +1,230 @@
 import {
-  CollectionType,
+  CONTENT_LENGTH_RANGES,
+  NARRATIVE_STRUCTURE_LABELS,
+  extractFirstSentence,
+  extractLastSentence,
+} from '../src/shared/contentUtils.ts';
+import type {
   ContentDraft,
   ContentLengthPreset,
-  NarrativeStartStyle,
+  NarrativeStructurePattern,
   PhrasebookEntry,
   StoryPlot,
-  VoiceProfileSettings,
-} from '../src/shared/types.js';
-import {
-  CONTENT_LENGTH_PRESETS,
-  NARRATIVE_START_STYLES,
-} from '../src/shared/contentUtils.js';
+  VoiceEngineConfig,
+  VoiceSliders,
+} from '../src/shared/types.ts';
+
+const ALL_NARRATIVE_STRUCTURES: NarrativeStructurePattern[] = [
+  'action_start',
+  'detail_start',
+  'dialogue_start',
+  'emotion_start',
+  'contradiction_start',
+  'observer_start',
+  'outcome_first',
+  'gradual_reveal',
+];
 
 export function auditSourceStoryCompleteness(story: StoryPlot): {
-  isComplete: boolean;
-  note: string;
+  sufficient: boolean;
+  missingFields: string[];
+  warningNote?: string;
 } {
-  const missing: string[] = [];
-  if (!story.fullPlot || story.fullPlot.length < 40) missing.push('fullPlot');
-  if (!story.participants) missing.push('participants');
-  if (!story.coreConflictOrAction) missing.push('coreConflictOrAction');
-  if (!story.unexpectedNuance) missing.push('unexpectedNuance');
-  if (!story.mainTriggerQuestion) missing.push('mainTriggerQuestion');
-  if (story.collection === 'debate' && (!story.sideAPosition || !story.sideBPosition)) {
-    missing.push('позиции сторон');
+  const missingFields: string[] = [];
+  if (!story.fullPlot || story.fullPlot.trim().length < 40) missingFields.push('fullPlot');
+  if (!story.coreConflictOrAction || story.coreConflictOrAction.trim().length < 10) {
+    missingFields.push('coreConflictOrAction');
   }
-  return {
-    isComplete: missing.length === 0,
-    note:
-      missing.length === 0
-        ? 'Сюжетная основа полная: все детали, конфликт/поступок, нюанс и вопрос присутствуют.'
-        : `Неполные поля (${missing.join(', ')}) — при генерации запрещено додумывать противоречащие факты.`,
-  };
+  if (!story.participants || story.participants.trim().length < 4) missingFields.push('participants');
+  if (!story.emotionalMechanism || story.emotionalMechanism.trim().length < 6) {
+    missingFields.push('emotionalMechanism');
+  }
+
+  if (missingFields.length > 0) {
+    return {
+      sufficient: false,
+      missingFields,
+      warningNote: `Исходная запись ${story.id} недостаточно заполнена (отсутствуют/короткие поля: ${missingFields.join(', ')}). Дополните сюжетную основу вместо выдумывания недостающих фактов.`,
+    };
+  }
+  return { sufficient: true, missingFields: [] };
 }
 
 export function selectDiverseNarrativeStructure(
+  requestedStructure: NarrativeStructurePattern | 'auto' | undefined,
   recentDrafts: ContentDraft[],
-  preferred?: NarrativeStartStyle
-): NarrativeStartStyle {
-  if (preferred) return preferred;
-  const recentStyles = recentDrafts.slice(0, 8).map((d) => d.narrativeStyle);
-  const unused = NARRATIVE_START_STYLES.map((s) => s.id).filter(
-    (id) => !recentStyles.slice(0, 4).includes(id)
-  );
-  if (unused.length > 0) {
-    return unused[0];
+  variantIndex = 0
+): NarrativeStructurePattern {
+  if (requestedStructure && requestedStructure !== 'auto') {
+    return requestedStructure;
   }
-  const lastStyle = recentStyles[0];
-  const fallback = NARRATIVE_START_STYLES.find((s) => s.id !== lastStyle);
-  return fallback ? fallback.id : 'action_start';
+
+  const recentUsed = new Set(recentDrafts.slice(0, 4).map((d) => d.narrativeStructure));
+  const candidates = ALL_NARRATIVE_STRUCTURES.filter((s) => !recentUsed.has(s));
+  const pool = candidates.length > 0 ? candidates : ALL_NARRATIVE_STRUCTURES;
+  return pool[variantIndex % pool.length];
 }
 
-export function selectActivePhrasebookHints(
-  phrasebook: PhrasebookEntry[],
-  collection: CollectionType
+export function selectEligiblePhrasebookHints(
+  story: StoryPlot,
+  sliders: VoiceSliders,
+  phrasebook: PhrasebookEntry[]
 ): PhrasebookEntry[] {
-  return phrasebook
-    .filter(
-      (p) =>
-        !p.banned &&
-        p.recentUsageCount < p.maxFrequencyPer10 &&
-        (p.collectionScope === 'both' || p.collectionScope === collection)
-    )
-    .sort((a, b) => b.weight - a.weight)
-    .slice(0, 4);
+  if (sliders.phraseDensity <= 0) return [];
+  const eligible = phrasebook.filter(
+    (p) => !p.banned && !p.isOverused && p.collections.includes(story.collection)
+  );
+  // Sort by editorial priority weight descending
+  const sorted = [...eligible].sort((a, b) => b.weight - a.weight);
+  const limit = sliders.phraseDensity >= 7 ? 5 : sliders.phraseDensity >= 4 ? 3 : 2;
+  return sorted.slice(0, limit);
 }
 
 export function buildRecentDiversityContext(recentDrafts: ContentDraft[]): string {
-  const slice = recentDrafts.slice(0, 35);
+  const slice = recentDrafts.filter((d) => d.status !== 'rejected').slice(0, 35);
   if (slice.length === 0) {
-    return 'Предыдущих публикаций пока нет.';
+    return 'Предыдущих публикаций пока нет — вы свободны в выборе композиции.';
   }
+
   return slice
-    .map(
-      (d) =>
-        `- [${d.contentId}] Стиль: ${d.narrativeStyle} | Заголовок: ${d.title} | Зачин: ${d.openingPattern}`
-    )
+    .map((d, idx) => {
+      const firstLine = d.openingPattern || extractFirstSentence(d.body);
+      const lastLine = d.endingPattern || d.mainTriggerQuestion || extractLastSentence(d.body);
+      const phrases = (d.usedPhrases || []).join(', ') || 'нет';
+      return `${idx + 1}. [${d.id}] «${d.title}» | приём: ${d.narrativeStructure} | начало: "${firstLine.slice(0, 90)}" | финал: "${lastLine.slice(0, 90)}" | выражения: ${phrases}`;
+    })
     .join('\n');
 }
 
-const HUMAN_FEW_SHOT_DEBATE = `Пример 1 (Живая история-спор, от первого лица):
-«Жена притащила щенка в нашу однушку, а у меня аллергия
+export function resolveActiveVoiceSliders(
+  config: VoiceEngineConfig,
+  story: StoryPlot,
+  overrideProfileId?: string,
+  overrideSliders?: Partial<VoiceSliders>
+): { profileId: string; profileName: string; sliders: VoiceSliders } {
+  const activeProfileId =
+    overrideProfileId ||
+    (story.collection === 'debate' ? config.debateProfileId : config.romanticProfileId);
 
-Вчера вернулся со смены — в коридоре стоит коробка с дырками, а внутри пищит какой-то комок. Оля сидит на полу, счастливая, говорит: не смогла пройти мимо, он под дождём у метро сидел.
+  const profile = config.profiles.find((p) => p.id === activeProfileId);
+  const baseRubric =
+    story.collection === 'debate' ? config.rubricSettings.debate : config.rubricSettings.romantic;
 
-Я сперва даже растерялся. А потом глаза зачесались, горло перехватило — ну классика. У меня с детства аллергия на шерсть, причём Оля про это отлично знает (я прошлой весной у её родителей чуть не задохнулся от кота).
+  const baseSliders: VoiceSliders = profile
+    ? {
+        irony: profile.irony,
+        conversational: profile.conversational,
+        emotionality: profile.emotionality,
+        provocativeness: profile.provocativeness,
+        phraseDensity: profile.phraseDensity,
+        sentenceLength: profile.sentenceLength,
+        dramaLevel: profile.dramaLevel,
+      }
+    : baseRubric;
 
-Говорю ей спокойно: давай отвезём на передержку, я оплачу, пристроим в хорошие руки. Она сразу в слёзы. Мол, я бессердечный, мне плевать на живое существо, а таблетки можно и попить.
+  return {
+    profileId: profile?.id || activeProfileId,
+    profileName: profile?.name || 'Пользовательский профиль',
+    sliders: {
+      ...baseSliders,
+      ...(overrideSliders || {}),
+    },
+  };
+}
 
-Лежу вот сейчас на балконе с открытым окном, шмыгаю носом. Пытаюсь понять — это я правда зануда без сердца, или так вообще нельзя делать, не спросив? А вы бы как поступили на моём месте?»`;
-
-const HUMAN_FEW_SHOT_ROMANTIC = `Пример 2 (Тёплая история с бытовой деталью):
-«Муж три месяца молча таскал домой сломанные стулья с помойки
-
-Я сначала думала, у Димы крыша поехала. Ну правда — в прихожей не пройти, везде какие-то обшарпанные ножки, фанера, банки с морилкой. Я даже пару раз прикрикнула, что мы не в столярке живём.
-
-Он не спорил. Просто бурчал «скоро уберу» и вечером после работы уходил на лоджию что-то шкурить.
-
-В субботу у меня день рождения. Я проснулась — в комнате пахнет свежим деревом и кофе. Посреди кухни стоит наш старый стол, а вокруг четыре одинаковых венских стула, гладкие, тёплые, цвет в цвет как у бабушки в деревне (я ещё год назад случайно ляпнула, что мне такие снились).
-
-Оказывается, он по всему району собирал старую рухлядь с одинаковыми спинками и по ночам перетягивал сиденья. Кривовато немного с обратной стороны — ну так он и не мебельщик. Зато я полчаса просто сидела и гладила подлокотник, даже чай остыл.»`;
-
-export function buildVoiceSystemPrompt(params: {
-  collection: CollectionType;
-  profile: VoiceProfileSettings;
-  narrativeStyle: NarrativeStartStyle;
+export function buildVoiceSystemInstruction(params: {
+  story: StoryPlot;
+  sliders: VoiceSliders;
+  profileName: string;
   lengthPreset: ContentLengthPreset;
+  narrativeStructure: NarrativeStructurePattern;
   phraseHints: PhrasebookEntry[];
-  bannedPhrases: string[];
 }): string {
-  const { collection, profile, narrativeStyle, lengthPreset, phraseHints, bannedPhrases } = params;
-  const styleMeta = NARRATIVE_START_STYLES.find((s) => s.id === narrativeStyle);
-  const lengthMeta = CONTENT_LENGTH_PRESETS[lengthPreset];
+  const { story, sliders, profileName, lengthPreset, narrativeStructure, phraseHints } = params;
+  const wordRange = CONTENT_LENGTH_RANGES[story.collection][lengthPreset];
 
-  const modeRules =
-    collection === 'debate'
-      ? `РЕЖИМ: «Кто здесь прав?» (живая спорная история).
-- Не выноси приговор и не назначай правого/виноватого. Покажи мотивы и обиду ОБЕИХ сторон через конкретные поступки и реплики.
-- Если в исходнике история написана от первого лица («Я...»), обязательно пиши от первого лица. Не превращай рассказ в сухой пересказ со стороны.
-- В финале оборви на живой кульминации или задай короткий человеческий вопрос без пафоса (вроде «И вот кто тут не прав?» или «А вы бы как поступили на его месте?»).`
-      : `РЕЖИМ: «Тёплые и романтические истории».
-- Живая человеческая история без открыточной патоки и назиданий.
-- Покажи чувства не словами вроде «он проявил заботу», а бытовыми мелочами: усталостью, неловкой деталью, запахом, случайной оговоркой, тихим поступком.
-- Если в исходнике рассказ идёт от первого лица («Я...»), сохраняй «Я»-повествование.`;
+  const sentenceRule =
+    sliders.sentenceLength === 'short'
+      ? 'Предложения преимущественно короткие, энергичные, с точными паузами и абзацами по 1–3 строки.'
+      : sliders.sentenceLength === 'free'
+        ? 'Свободный ритм: чередуй короткие реплики-уколы с более развёрнутыми наблюдениями рассказчика.'
+        : 'Смешанная длина предложений: живой разговорный ритм без монотонных конструкций.';
+
+  const rubricModeBlock =
+    story.collection === 'debate'
+      ? `РЕЖИМ ГОЛОСА A — DEBATE VOICE («Кто здесь прав?» для Яндекс Дзена):
+- Ориентир структуры (адаптируй естественно под сюжет, без жёстких рамок): HOOK -> STORY -> CONFLICT -> TWIST -> TRIGGER QUESTION.
+- Покажи живую логику ОБЕИХ сторон (sideAPosition и sideBPosition). Не назначай виноватого заранее, не превращай рассказ в травлю одного участника.
+- Используй контраст между словами и поступками, меткие короткие комментарии к поведению героев, живую бытовую конкретику.
+- Начинай с интриги, детали, поступка или противоречия — НИКОГДА со штампов («Не понимаю современных мужчин…», «Однажды одна девушка встретила…», «У меня есть знакомая…», «Недавно произошла такая история…», «Представьте себе ситуацию…», «В современном мире отношения…») и не начинай каждую статью с вопроса.
+- Финальный вопрос должен вызывать желание поспорить в комментариях (без шаблонных одинаковых формулировок).`
+      : `РЕЖИМ ГОЛОСА B — ROMANTIC VOICE («Романтические истории» для Яндекс Дзена):
+- Ориентир структуры (адаптируй органично): EMOTIONAL HOOK -> MICRO STORY -> FEELING -> EMOTIONAL ENDING -> QUESTION.
+- Показывай любовь и заботу через конкретные мелкие поступки, предметы, привычки и реакции — БЕЗ абстрактных моралей и пафосных цитат уровня открытки.
+- Запрещено использовать клише вроде «любовь — это не слова, а поступки» и натужную сентиментальность.
+- Сохраняй ощущение реальной живой истории, лёгкий юмор повседневной жизни и искреннее тепло (ирония здесь мягкая и тёплая, без сарказма).
+- Вопрос или финальная деталь в конце должны рождаться естественно из самой истории.`;
 
   const phraseBlock =
-    phraseHints.length > 0
-      ? `\nДополнительные естественные наблюдения (НЕ обязательны, вставь максимум 1 только если органично ложится в живую речь): ${phraseHints
-          .map((p) => `"${p.phrase}"`)
-          .join('; ')}.`
-      : '';
+    phraseHints.length > 0 && sliders.phraseDensity > 0
+      ? `\nСЛОВАРЬ ВЫРАЖЕНИЙ MELO_LOVE (опциональные ориентиры интонации, плотность ${sliders.phraseDensity}/10):
+${phraseHints.map((p) => `- «${p.phrase}» (${p.notes})`).join('\n')}
+КРИТИЧЕСКИ ВАЖНО: НЕ вставляй фразы механически и НЕ пихай их в каждый текст! Используй максимум 0–1 выражение из списка И ТОЛЬКО если оно идеально ложится в живой ритм конкретной сцены.`
+      : '\nФирменные выражения из словаря в этой публикации использовать НЕ нужно — опирайся исключительно на живую интонацию рассказчика.';
 
-  const bannedBlock =
-    bannedPhrases.length > 0
-      ? `\nНЕ повторяй недавно использованные обороты: ${bannedPhrases.map((b) => `"${b}"`).join(', ')}.`
-      : '';
+  return `Ты — ведущий автор и голос редакционного проекта MELO_LOVE.
 
-  const fewShotExample =
-    collection === 'debate' ? HUMAN_FEW_SHOT_DEBATE : HUMAN_FEW_SHOT_ROMANTIC;
+ХАРАКТЕР РАССКАЗЧИКА MELO_LOVE:
+- Умный, наблюдательный и эмоционально грамотный знакомый, который умеет рассказывать живые истории.
+- Говорит на равных: без позиции «сверху вниз», без менторства, без морализаторства, без искусственной мотивационной риторики и без роли «кабинетного психолога».
+- Не имитирует чужих публичных блогеров/журналистов — держит собственный живой русский авторский голос.
+- Замечает абсурдные и говорящие бытовые детали, умеет подать мысль одной меткой фразой и знает меру шутке.
 
-  return `Ты — живой автор и редактор популярных блогов на русском языке. Твоя задача — перерабатывать англоязычные истории (с Reddit и других форумов) и жизненные сюжеты в увлекательные, естественные посты для Telegram и Яндекс.Дзена. Текст должен звучать так, будто его написал живой человек на эмоциях, а не нейросеть.
+АКТИВНЫЙ ПРОФИЛЬ «${profileName}»:
+- Ирония: ${sliders.irony}/10
+- Разговорность: ${sliders.conversational}/10
+- Эмоциональность: ${sliders.emotionality}/10
+- Провокационность: ${sliders.provocativeness}/10
+- Драматичность: ${sliders.dramaLevel}/10
+- Ритм: ${sentenceRule}
+- Ориентировочный объём основного текста (body): ${wordRange.min}–${wordRange.max} слов (раскрывай сюжет естественно, не раздувай текст водой).
+- Выбранный приём построения текста: ${NARRATIVE_STRUCTURE_LABELS[narrativeStructure]} (${narrativeStructure}).
 
-### 1. АДАПТАЦИЯ И ЛОКАЛИЗАЦИЯ
-- Переводи смысл, а не слова. Убирай западные реалии, которые режут глаз: заменяй иностранные имена на обычные русские без экзотики (Аня, Сергей, Оля, Дима, Марина, Лёша), переводи мили/фунты/доллары в понятные бытовые эквиваленты (километры, килограммы, обычные траты), если это уместно.
-- Сохраняй нерв и бытовые мелочи оригинала — именно детали делают историю настоящей.
-- Если история от первого лица («Я...»), пиши от первого лица. Не переделывай живой рассказ в обезличенный пересказ от третьего лица, если этого не требует сюжет.
+${rubricModeBlock}
+${phraseBlock}
 
-### 2. ЖЁСТКИЙ СТОП-ЛИСТ (КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО)
-Запрещены любые канцеляризмы, психологический новояз и нейросетевые связки:
-- Вводные штампы: «Давайте смотреть правде в глаза», «И вот тут начинается самое интересное», «Тут ведь какая штука», «Тут ведь какая история», «Пища для ума», «В итоге мы имеем», «Не секрет, что», «Важно понимать», «Стоит отметить», «Давайте по-честному», «Понимаете, в чём штука», «В современном мире», «Важно отметить», «Подводя итог», «Таким образом».
-- Психологические клише: «личные границы», «токсичный», «абьюз», «эмоциональный импульс», «нарушение табу», «эгоизм в красивой обёртке», «выйти из зоны комфорта», «проработать травму», «красные флаги».
-- Искусственные метафоры: «зона боевых действий», «жизнь превратилась в пытку/тюрьму», «акт доброты».
-- Назидательная мораль в конце. Не разжёвывай читателю, кто прав, а кто виноват.
+ПРАВИЛА ЧЕСТНОСТИ И ТОЧНОСТИ К ИСХОДНИКУ:
+1. Опирайся на все поля исходного сюжета: fullPlot, participants, setting, coreConflictOrAction, sideAPosition, sideBPosition, emotionalMechanism, hiddenExpectation, unexpectedNuance, possibleTwist.
+2. Не меняй суть и факты исходного сюжета. Допустимы лишь естественные бытовые детали обстановки, не противоречащие исходнику.
+3. НЕ копируй длинные куски текста из fullPlot дословно — расскажи историю живым авторским языком.
+4. НЕ выдавай придуманный сюжет за «реальное письмо читательницы» и не выдумывай авторов, цитаты или сторонние ссылки.
+5. Заголовки (основной + 2 альтернативных): живые и интригующие, БЕЗ ложных обещаний, БЕЗ жёлтого кликбейта и БЕЗ CAPS LOCK.`;
+}
 
-### 3. КАК ПИСАТЬ ПО-ЧЕЛОВЕЧЕСКИ (СТИЛЬ И РИТМ)
-- Рваный ритм: чередуй короткие, рубленые фразы (3–5 слов) со средними. Не пиши абзацы одинаковой длины.
-- Разговорный синтаксис: используй парцелляцию (деление одной мысли на несколько предложений), тире (—), скобки для побочных мыслей, разговорные частицы («ну», «в общем», «короче», «вроде как», «причём»), но без перебора и подросткового сленга.
-- Конкретика вместо оценок: вместо «он проявил неуважение к её времени» пиши «он просто встал, расплатился за свой салат и уехал».
-- Не вылизывай текст: допустима лёгкая шероховатость речи и естественные повторы, как в живом рассказе другу на кухне.
+export function buildSourceStoryPromptBlock(story: StoryPlot): string {
+  const researchContext =
+    story.originType === 'external' || story.researchId
+      ? `\nПроисхождение: внешний материал (${story.ideaSource}${story.sourceUrl ? `, ${story.sourceUrl}` : ''}${story.researchId ? `, ID исследования: ${story.researchId}` : ''}). Переосмысляй живо, без дословного перевода.\nЗаметки исследования: ${story.researchNotes || story.sourceAnalysisNote || 'нет'}`
+      : '\nПроисхождение: оригинальная сюжетная разработка базы MELO_LOVE.';
 
-### 4. СТРУКТУРА ПОСТА
-1. Заголовок: цепляющий, разговорный, БЕЗ двоеточий и конструктов вида «А или Б: почему произошло В». Пример хорошего: «Жена притащила щенка в нашу однушку, а у меня аллергия».
-2. Завязка (1–2 предложения): сразу в суть конфликта или ситуации, без долгих вступлений про «тишину и уют».
-3. Основная часть: развитие событий с деталями из исходника (от первого лица или как пересказ реального случая знакомых).
-4. Финал: оборви историю на кульминации или оставь простой, живой вопрос без пафоса («И вот кто тут не прав?» или «А вы бы как поступили на его месте?»).
-
-### 5. ФОРМАТИРОВАНИЕ И ОРИЕНТИРЫ
-- Никаких списков с буллитами или нумерацией, никаких жирных выделений (** / __) внутри текста и НИКАКИХ эмодзи.
-- Короткие абзацы по 2–4 строки для удобного чтения с телефона.
-- Запрещено дословно копировать предложения из поля fullPlot и выдумывать факты, противоречащие сюжетной основе.
-
-${modeRules}
-
-Параметры подачи (0–100):
-- Ирония: ${profile.irony} | Разговорность: ${profile.conversational} | Эмоциональность: ${profile.emotionality}
-- Острота: ${profile.provocativeness} | Длина фраз: ${profile.sentenceLength} | Драматизм: ${profile.dramaLevel}
-Старт сцены: ${styleMeta?.label || narrativeStyle} (${styleMeta?.hint || ''}).
-Целевой объём текста: ${lengthMeta.minWords}–${lengthMeta.maxWords} слов.${phraseBlock}${bannedBlock}
-
-Ориентир живой человеческой интонации (few-shot):
-${fewShotExample}`;
+  return `ИСХОДНЫЙ СЮЖЕТ [${story.id}]
+- Коллекция: ${story.collection === 'debate' ? 'Кто здесь прав? (debate)' : 'Романтические истории (romantic)'}
+- Категория / подкатегория: ${story.category} / ${story.subcategory}
+- Название в базе: ${story.title}
+- Краткое описание: ${story.shortDescription}
+- Полная сюжетная основа: ${story.fullPlot}
+- Участники: ${story.participants}
+- Место/обстановка: ${story.setting}
+- Ключевой конфликт / действие: ${story.coreConflictOrAction}
+- Позиция стороны A: ${story.sideAPosition}
+- Позиция стороны B: ${story.sideBPosition}
+- Эмоциональный механизм: ${story.emotionalMechanism}
+- Скрытое ожидание: ${story.hiddenExpectation}
+- Неожиданный нюанс: ${story.unexpectedNuance}
+- Возможный поворот / финал: ${story.possibleTwist}
+- Триггерный вопрос базы: ${story.mainTriggerQuestion}
+- Дополнительные вопросы: ${(story.additionalQuestions || []).join(' | ') || 'нет'}
+- Сюжетная механика: ${story.plotMechanic}
+- Уникальная деталь: ${story.uniqueDetails}
+- Ключевые слова: ${(story.keywords || []).join(', ')}${researchContext}`;
 }

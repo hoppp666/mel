@@ -1,24 +1,97 @@
 {
-  "activePresetId": "melo-standard",
-  "debate": {
-    "irony": 45,
-    "conversational": 70,
-    "emotionality": 65,
-    "provocativeness": 60,
-    "phraseDensity": 40,
-    "sentenceLength": 55,
-    "dramaLevel": 55
+  "debateProfileId": "melo_love_standard",
+  "romanticProfileId": "more_emotional",
+  "rubricSettings": {
+    "debate": {
+      "irony": 8,
+      "conversational": 9,
+      "emotionality": 7,
+      "provocativeness": 8,
+      "phraseDensity": 5,
+      "sentenceLength": "mixed",
+      "dramaLevel": 6
+    },
+    "romantic": {
+      "irony": 3,
+      "conversational": 8,
+      "emotionality": 8,
+      "provocativeness": 2,
+      "phraseDensity": 4,
+      "sentenceLength": "mixed",
+      "dramaLevel": 4
+    }
   },
-  "romantic": {
-    "irony": 20,
-    "conversational": 65,
-    "emotionality": 80,
-    "provocativeness": 20,
-    "phraseDensity": 35,
-    "sentenceLength": 50,
-    "dramaLevel": 45
-  },
-  "customPresets": [],
-  "minPublishQualityScore": 85,
-  "updatedAt": "2026-11-21T00:56:58.708Z"
+  "profiles": [
+    {
+      "id": "melo_love_standard",
+      "name": "Стандартный MELO_LOVE",
+      "description": "Узнаваемая авторская интонация проекта: живой наблюдательный рассказчик, точные детали и баланс между иронией и теплотой.",
+      "collectionHint": "both",
+      "isCustom": false,
+      "irony": 6,
+      "conversational": 9,
+      "emotionality": 7,
+      "provocativeness": 6,
+      "phraseDensity": 5,
+      "sentenceLength": "mixed",
+      "dramaLevel": 5
+    },
+    {
+      "id": "more_ironic",
+      "name": "Более ироничный",
+      "description": "Острая наблюдательность, контраст слов и поступков, лёгкие подколки без грубости — идеально для неоднозначных споров.",
+      "collectionHint": "debate",
+      "isCustom": false,
+      "irony": 8,
+      "conversational": 9,
+      "emotionality": 7,
+      "provocativeness": 8,
+      "phraseDensity": 6,
+      "sentenceLength": "short",
+      "dramaLevel": 6
+    },
+    {
+      "id": "more_emotional",
+      "name": "Более эмоциональный",
+      "description": "Высокая теплота, проживание момента через бытовые мелочи, искреннее сопереживание без сентиментальных штампов.",
+      "collectionHint": "romantic",
+      "isCustom": false,
+      "irony": 3,
+      "conversational": 8,
+      "emotionality": 9,
+      "provocativeness": 2,
+      "phraseDensity": 4,
+      "sentenceLength": "mixed",
+      "dramaLevel": 5
+    },
+    {
+      "id": "calm_conversational",
+      "name": "Спокойный разговорный",
+      "description": "Неторопливый доверительный тон умного собеседника без резких перепадов и лишней драматизации.",
+      "collectionHint": "both",
+      "isCustom": false,
+      "irony": 4,
+      "conversational": 9,
+      "emotionality": 6,
+      "provocativeness": 4,
+      "phraseDensity": 3,
+      "sentenceLength": "free",
+      "dramaLevel": 3
+    },
+    {
+      "id": "author_experiment",
+      "name": "Авторский эксперимент",
+      "description": "Смелые композиционные ходы: старт с финала, короткий ритм, неожиданные авторские замечания на полях.",
+      "collectionHint": "both",
+      "isCustom": false,
+      "irony": 7,
+      "conversational": 8,
+      "emotionality": 8,
+      "provocativeness": 7,
+      "phraseDensity": 5,
+      "sentenceLength": "free",
+      "dramaLevel": 7
+    }
+  ],
+  "updatedAt": "2026-11-20T23:51:16.454Z"
 }
