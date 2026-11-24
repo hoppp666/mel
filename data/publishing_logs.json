@@ -1,5 +1,13 @@
 [
   {
+    "id": "PLOG-MWUA0EOF-HY7F",
+    "publicationId": "PUB-D-999102",
+    "action": "telegram_sent",
+    "status": "zen_delivery_unconfirmed",
+    "detail": "Отправлено в Telegram (message_id=16). Ожидает фактического подтверждения выхода в Дзене.",
+    "createdAt": "2026-11-24T05:50:45.327Z"
+  },
+  {
     "id": "PLOG-MWU75T4Y-KZ65",
     "publicationId": "PUB-D-999105",
     "action": "autonomous_created",

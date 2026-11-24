@@ -316,11 +316,12 @@
     "collection": "debate",
     "discoveredAt": "2026-11-11T03:00:00.000Z",
     "contentFingerprint": "бойкот|ссор|предлог|наговор|лишн|эмоциональн|парадокс|длительн|молч|одн|супруг|способ|переж|конфликт|против|потребност|втор|немедленн|прояснен|дмитр|ждет|жив|диалог|татьян",
-    "status": "ready",
+    "status": "published_to_telegram",
     "storyId": "ML-D-0018",
-    "updatedAt": "2026-11-24T03:51:15.988Z",
+    "updatedAt": "2026-11-24T05:50:45.327Z",
     "contentId": "ML-P-D-000017",
-    "publicationId": "PUB-D-999102"
+    "publicationId": "PUB-D-999102",
+    "telegramMessageId": 16
   },
   {
     "id": "REG-000111",

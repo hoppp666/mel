@@ -322,12 +322,29 @@
   ],
   "nextScheduledResearchAt": "2026-11-24T08:30:25.061Z",
   "publishedTodayDate": "2026-11-24",
-  "publishedTodayCount": 1,
+  "publishedTodayCount": 2,
   "totalDiscoveredMaterials": 95,
   "totalUniqueStoriesSaved": 0,
   "totalPublicationsCreated": 30,
-  "totalPublishedToTelegram": 11,
+  "totalPublishedToTelegram": 12,
   "runHistory": [
+    {
+      "runId": "RUN-MWUA0EOG",
+      "kind": "publish",
+      "mode": "github_actions",
+      "startedAt": "2026-11-24T05:50:44.749Z",
+      "finishedAt": "2026-11-24T05:50:45.327Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 1,
+      "summary": "Опубликовано в Telegram: PUB-D-999102 (message_id=16). Ожидает подтверждения Дзена."
+    },
     {
       "runId": "RUN-MWU75T54",
       "kind": "publish",
@@ -991,30 +1008,12 @@
       "publishedToTelegram": 0,
       "summary": "Обработано сюжетов: 2, создано публикаций: 0.",
       "error": "Таймаут запроса (40с)"
-    },
-    {
-      "runId": "RUN-MWQ2E1UY",
-      "kind": "research",
-      "mode": "github_actions",
-      "startedAt": "2026-11-21T07:02:45.870Z",
-      "finishedAt": "2026-11-21T07:06:20.265Z",
-      "ok": false,
-      "discovered": 8,
-      "uniqueAdded": 0,
-      "duplicates": 8,
-      "analyzed": 0,
-      "pendingAnalysis": 4,
-      "storiesApproved": 0,
-      "publicationsCreated": 0,
-      "publishedToTelegram": 0,
-      "summary": "Партия RBATCH-0003 (debate): найдено 8, новых 0, дубликатов 8, проанализировано 0, в базу сюжетов 0.",
-      "error": "Модель Gemini временно перегружена (503 UNAVAILABLE). Повторите запрос чуть позже."
     }
   ],
   "lastCollectionUsed": "debate",
   "lastResearchRunAt": "2026-11-24T04:30:25.057Z",
   "lastProductionRunAt": "2026-11-24T04:30:58.499Z",
-  "lastPublishRunAt": "2026-11-24T04:30:58.504Z",
-  "nextScheduledPublishAt": "2026-11-24T05:02:51.840Z",
-  "lastSuccessfulTelegramAt": "2026-11-24T03:02:51.840Z"
+  "lastPublishRunAt": "2026-11-24T05:50:45.327Z",
+  "nextScheduledPublishAt": "2026-11-24T07:50:45.327Z",
+  "lastSuccessfulTelegramAt": "2026-11-24T05:50:45.327Z"
 }

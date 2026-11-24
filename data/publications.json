@@ -269,11 +269,14 @@
       "hashtagsOk": true,
       "notes": []
     },
-    "status": "ready",
+    "status": "zen_delivery_unconfirmed",
     "idempotencyKey": "PUB-D-999102-ML-D-0018",
     "revisionHistory": [],
     "createdAt": "2026-11-24T03:51:11.354Z",
-    "updatedAt": "2026-11-24T03:51:11.354Z"
+    "updatedAt": "2026-11-24T05:50:45.326Z",
+    "telegramMessageId": 16,
+    "telegramChatId": "-1004469313498",
+    "sentToTelegramAt": "2026-11-24T05:50:45.326Z"
   },
   {
     "publicationId": "PUB-D-999101",
