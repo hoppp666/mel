@@ -7,7 +7,7 @@ import {
 } from '../src/shared/types.js';
 import { getCategoriesForCollection, PLOT_MECHANICS } from '../src/shared/categories.js';
 import { calculateResearchQuality } from '../src/shared/similarity.js';
-import { sanitizeKramarovskyDashes } from '../src/shared/contentUtils.js';
+import { cleanEditorialFormatting } from '../src/shared/contentUtils.js';
 import {
   callChatCompletionJson,
   formatAiError,
@@ -45,9 +45,9 @@ export async function analyzeAndTransformResearchItem(params: {
   const { item, depth, generateIdea, signal } = params;
   const categories = getCategoriesForCollection(item.collection);
 
-  const systemInstruction = `Ты — исследователь зарубежного контента и сценарист базы MELO_LOVE.
+  const systemInstruction = `Ты — живой автор и редактор популярных блогов на русском языке (MELO_LOVE).
 Отвечай строго валидным JSON-объектом. Не выдумывай факты исходного материала, даты, авторов или цитаты.
-Пиши живым русским языком, без канцелярита и без длинных тире (—/–) в сюжетных описаниях.`;
+Пиши живым человеческим языком (допустимы тире —, скобки и короткие фразы), БЕЗ канцелярита, БЕЗ психологического новояза («личные границы», «токсичный», «абьюз», «красные флаги», «зона комфорта») и БЕЗ эмодзи/буллитов.`;
 
   const prompt = `Проанализируй найденный материал строго на основе приведённых фактов.
 Разделяй:
@@ -57,7 +57,11 @@ ${
   generateIdea
     ? `3) Создай самостоятельную русскую сюжетную заготовку (generatedPlot) для коллекции "${
         item.collection === 'debate' ? 'Кто здесь прав?' : 'Романтические истории'
-      }", переосмыслив механику в новых российских бытовых обстоятельствах (без перевода и без копирования текста).
+      }", адаптировав историю с Reddit/форума для русскоязычных читателей:
+- Переводи смысл, а не слова; убирай западные реалии, меняй иностранные имена на обычные русские (Аня, Сергей, Оля, Дима, Марина — без экзотики), переводи мили/фунты/доллары в понятные бытовые эквиваленты.
+- Сохраняй нерв и конкретные бытовые мелочи оригинала; если исходник написан от первого лица («Я...»), обязательно сохрани «Я»-подачу и запиши эту деталь в fullPlot и uniqueDetails.
+- Заголовок (title): цепляющий, разговорный, БЕЗ двоеточий (:) и конструкций «А или Б: почему произошло В».
+- Полностью исключи слова из стоп-листа («личные границы», «токсичный», «абьюз», «красные флаги», «важно понимать», «стоит отметить», «пища для ума», «и вот тут начинается самое интересное» и т.п.) и назидательную мораль.
 Допустимые категории: ${categories.slice(0, 25).join(', ')}.
 Допустимые механики: ${PLOT_MECHANICS.join(', ')}.`
     : 'Поле generatedPlot верни как null.'
@@ -165,10 +169,10 @@ ${
     const gp = generateIdea && parsed.generatedPlot?.title
       ? {
           ...parsed.generatedPlot,
-          title: sanitizeKramarovskyDashes(parsed.generatedPlot.title),
-          shortDescription: sanitizeKramarovskyDashes(parsed.generatedPlot.shortDescription || ''),
-          fullPlot: sanitizeKramarovskyDashes(parsed.generatedPlot.fullPlot || ''),
-          mainTriggerQuestion: sanitizeKramarovskyDashes(parsed.generatedPlot.mainTriggerQuestion || ''),
+          title: cleanEditorialFormatting(parsed.generatedPlot.title),
+          shortDescription: cleanEditorialFormatting(parsed.generatedPlot.shortDescription || ''),
+          fullPlot: cleanEditorialFormatting(parsed.generatedPlot.fullPlot || ''),
+          mainTriggerQuestion: cleanEditorialFormatting(parsed.generatedPlot.mainTriggerQuestion || ''),
         }
       : null;
 

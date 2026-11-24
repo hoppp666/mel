@@ -3,17 +3,21 @@ import assert from 'node:assert/strict';
 import {
   buildContentExportPayload,
   calculateContentQuality,
+  cleanEditorialFormatting,
   countWords,
   detectBannedAiCliches,
   detectBannedOpenings,
+  detectFormattingViolations,
   detectRomanticCliches,
   extractEndingPattern,
   extractOpeningPattern,
   hasVerbatimPlotCopy,
-  sanitizeKramarovskyDashes,
 } from '../src/shared/contentUtils.js';
+import { runEditorialDiagnostics } from '../src/shared/publishingUtils.js';
+import { buildVoiceSystemPrompt } from '../server/voiceEngine.js';
 import { ContentDraft, PhrasebookEntry } from '../src/shared/types.js';
 import { buildDebateSeeds } from '../server/seedDebate.js';
+import { loadVoiceConfig } from '../server/contentStorage.js';
 
 test('countWords and opening/ending pattern extractors handle Russian punctuation cleanly', () => {
   const text =
@@ -37,17 +41,53 @@ test('detectBannedOpenings and detectRomanticCliches catch AI slop templates', (
   assert.ok(cliches.length >= 2);
 });
 
-test('sanitizeKramarovskyDashes removes em/en dashes while keeping Russian hyphenated words, and detectBannedAiCliches flags AI cliches', () => {
-  const raw = 'Давайте по-честному — это просто отговорка – и всё-таки кто-то промолчал.';
-  const cleaned = sanitizeKramarovskyDashes(raw);
-  assert.equal(/[—–]/.test(cleaned), false);
-  assert.ok(cleaned.includes('по-честному'));
-  assert.ok(cleaned.includes('кто-то'));
-  assert.ok(cleaned.includes(': это'));
+test('natural Russian dashes (—) are allowed while stop-list clichés and psychological jargon are flagged', () => {
+  const naturalText =
+    'Вчера вернулся со смены — в коридоре стоит коробка с дырками, а внутри пищит какой-то комок (ну классика).';
+  assert.equal(detectBannedAiCliches(naturalText).length, 0);
+  assert.equal(cleanEditorialFormatting(naturalText).includes('—'), true);
 
-  const aiSlop = 'В современном мире важно отметить — данный фактор играет роль.';
-  const hits = detectBannedAiCliches(aiSlop);
-  assert.ok(hits.length >= 3);
+  const stopListSample =
+    'Давайте смотреть правде в глаза: тут ведь какая штука — важно понимать про личные границы, токсичный абьюз, красные флаги и выход из зоны комфорта. В итоге мы имеем пищу для ума и жизнь превратилась в пытку.';
+  const hits = detectBannedAiCliches(stopListSample);
+  assert.ok(hits.length >= 8);
+});
+
+test('detectFormattingViolations and runEditorialDiagnostics flag headline colons, bullet lists, bold markdown, and emojis', () => {
+  const violations = detectFormattingViolations({
+    title: 'Любовь или расчёт: почему он ушёл с ужина',
+    body: '- первый пункт\n**жирный текст** и смайл 😊',
+    triggerQuestion: 'Кто прав?',
+  });
+  assert.equal(violations.length, 4);
+
+  const diag = runEditorialDiagnostics({
+    collection: 'debate',
+    title: 'Муж или работа: что важнее в пятницу',
+    body: 'Первый абзац истории с достаточным объёмом текста для проверки длины абзацев и отсутствия списков.\n\n- второй абзац списком, да ещё с эмодзи 🔥 и **жирным** текстом про токсичный быт.',
+    closingQuestion: 'Кто тут не прав?',
+    hashtags: ['#семья', '#споры_в_паре', '#отношения'],
+  });
+  assert.equal(diag.headlineOk, false);
+  assert.equal(diag.spellingOk, false);
+  assert.equal(diag.meloStyleOk, false);
+});
+
+test('buildVoiceSystemPrompt includes human author rules, Russian adaptation, first-person POV, and stop-list', () => {
+  const cfg = loadVoiceConfig();
+  const prompt = buildVoiceSystemPrompt({
+    collection: 'debate',
+    profile: cfg.debate,
+    narrativeStyle: 'action_start',
+    lengthPreset: 'standard',
+    phraseHints: [],
+    bannedPhrases: [],
+  });
+  assert.match(prompt, /живой автор и редактор популярных блогов/i);
+  assert.match(prompt, /от первого лица/i);
+  assert.match(prompt, /Жена притащила щенка в нашу однушку, а у меня аллергия/);
+  assert.match(prompt, /личные границы/);
+  assert.match(prompt, /тире \(—\)/);
 });
 
 test('hasVerbatimPlotCopy detects 8-word contiguous verbatim copying from fullPlot', () => {
@@ -110,6 +150,21 @@ test('calculateContentQuality enforces deterministic score caps below 85 on crit
   });
   assert.ok(resTemplate.overall <= 78);
   assert.equal(resTemplate.penalties.soundsLikeAiTemplate, true);
+
+  // 3. Stop-list psychological jargon cap (<= 78)
+  const resPsychCliche = calculateContentQuality({
+    collection: 'debate',
+    title: 'Жена притащила щенка в нашу однушку, а у меня аллергия',
+    body: 'Он просто нарушил мои личные границы, проявил токсичный эгоизм и показал красные флаги.',
+    triggerQuestion: 'Кто тут не прав?',
+    sourceStory,
+    recentDrafts: [],
+    phrasebook: [],
+    minScore: 85,
+  });
+  assert.ok(resPsychCliche.overall <= 78);
+  assert.equal(resPsychCliche.passedThreshold, false);
+  assert.equal(resPsychCliche.penalties.soundsLikeAiTemplate, true);
 });
 
 test('buildContentExportPayload supports draft_only, with_source, and story_only modes', () => {

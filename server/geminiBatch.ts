@@ -11,7 +11,7 @@ import {
   calculateQualityScore,
   findSimilarStories,
 } from '../src/shared/similarity.js';
-import { sanitizeKramarovskyDashes } from '../src/shared/contentUtils.js';
+import { cleanEditorialFormatting } from '../src/shared/contentUtils.js';
 import {
   callChatCompletionJson,
   formatAiError,
@@ -112,8 +112,9 @@ export async function generateStoryBatch(params: {
       ? `Коллекция A «Кто здесь прав?» — неоднозначные жизненные ситуации, где аргументы есть у обеих сторон (не создавай очевидного злодея и идеальную жертву).`
       : `Коллекция B «Романтические истории» — конкретные живые сцены, маленькие поступки заботы и узнаваемые бытовые детали (без шаблонных цитат и приторности).`;
 
-  const promptText = `Ты — старший редактор базы сюжетных основ MELO_LOVE для Яндекс Дзена.
-Задача: сгенерировать ровно ${count} уникальных сюжетных основ (НЕ готовых статей) на русском языке, без канцелярита и без длинных тире (—/–).
+  const promptText = `Ты — живой автор и редактор популярных блогов на русском языке (MELO_LOVE для Telegram и Дзена).
+Задача: сгенерировать ровно ${count} уникальных сюжетных основ (НЕ готовых статей) на русском языке.
+Пиши по-человечески: с конкретными бытовыми мелочами, обычными русскими именами (Аня, Сергей, Оля, Дима, Марина), без канцелярита и психологического новояза («личные границы», «токсичный», «абьюз», «красные флаги», «зона комфорта», «важно понимать», «стоит отметить»). Заголовки — разговорные, БЕЗ двоеточий (:) и конструктов вида «А или Б: почему В».
 ${collectionGuide}
 
 Приоритетные категории для баланса базы: ${targetCategories.join(', ')}.
@@ -124,8 +125,8 @@ ${existingSummary}
 
 ${
   searchMode === 'web_search'
-    ? 'Опирайся на характерные реальные дилеммы из зарубежных обсуждений отношений (Reddit AITA/relationship_advice, колонки о психологии пары) и переосмысли найденные жизненные механики в самостоятельные русские сюжеты без копирования текста и без выдумывания фейковых URL.'
-    : 'Генерируй оригинальные жизненные ситуации с конкретными бытовыми деталями, возрастами участников и скрытой психологической мотивацией.'
+    ? 'Опирайся на характерные реальные дилеммы из обсуждений на Reddit (AITA, relationship_advice, relationships, love) и адаптируй их под российские бытовые реалии (без перевода в лоб, без западных имён/миль/долларов и без выдумывания фейковых URL, сохраняя нерв и повествование от первого лица «Я...», если оно естественно для сюжета).'
+    : 'Генерируй живые жизненные ситуации с конкретными бытовыми деталями, возрастами участников и реальными репликами без морализаторства.'
 }
 
 Верни JSON-объект вида {"items": [...]}, где в массиве "items" ровно ${count} элементов со следующими полями у каждого элемента:
@@ -134,7 +135,7 @@ category, subcategory, title, shortDescription, fullPlot, participants, setting,
   try {
     const response = await callChatCompletionJson<{ items?: RawGeneratedItem[] } | RawGeneratedItem[]>({
       systemInstruction:
-        'Ты — старший редактор базы сюжетных основ MELO_LOVE. Возвращай строго валидный JSON вида {"items": [...]}.',
+        'Ты — живой автор и редактор популярных блогов на русском языке (MELO_LOVE). Возвращай строго валидный JSON вида {"items": [...]}.',
       userPrompt: promptText,
       temperature: 0.78,
       maxTokens: 4096,
@@ -159,19 +160,19 @@ category, subcategory, title, shortDescription, fullPlot, participants, setting,
         collection,
         category: item.category || targetCategories[idx % targetCategories.length] || 'Разные взгляды на жизнь',
         subcategory: item.subcategory || 'Жизненная ситуация',
-        title: sanitizeKramarovskyDashes(item.title || `Сюжет #${idx + 1}`),
-        shortDescription: sanitizeKramarovskyDashes(item.shortDescription || ''),
-        fullPlot: sanitizeKramarovskyDashes(item.fullPlot || ''),
+        title: cleanEditorialFormatting(item.title || `Сюжет #${idx + 1}`),
+        shortDescription: cleanEditorialFormatting(item.shortDescription || ''),
+        fullPlot: cleanEditorialFormatting(item.fullPlot || ''),
         participants: item.participants || 'Партнёры',
         setting: item.setting || 'Домашняя обстановка',
-        coreConflictOrAction: sanitizeKramarovskyDashes(item.coreConflictOrAction || ''),
-        sideAPosition: sanitizeKramarovskyDashes(item.sideAPosition || ''),
-        sideBPosition: sanitizeKramarovskyDashes(item.sideBPosition || ''),
+        coreConflictOrAction: cleanEditorialFormatting(item.coreConflictOrAction || ''),
+        sideAPosition: cleanEditorialFormatting(item.sideAPosition || ''),
+        sideBPosition: cleanEditorialFormatting(item.sideBPosition || ''),
         emotionalMechanism: item.emotionalMechanism || '',
         hiddenExpectation: item.hiddenExpectation || '',
         unexpectedNuance: item.unexpectedNuance || '',
         possibleTwist: item.possibleTwist || '',
-        mainTriggerQuestion: sanitizeKramarovskyDashes(item.mainTriggerQuestion || ''),
+        mainTriggerQuestion: cleanEditorialFormatting(item.mainTriggerQuestion || ''),
         additionalQuestions: Array.isArray(item.additionalQuestions) ? item.additionalQuestions : [],
         keywords: Array.isArray(item.keywords) ? item.keywords : [],
         ideaSource:

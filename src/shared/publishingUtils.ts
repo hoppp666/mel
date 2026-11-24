@@ -4,7 +4,12 @@ import {
   PublicationItem,
   StoryPlot,
 } from './types.js';
-import { detectBannedOpenings, detectRomanticCliches } from './contentUtils.js';
+import {
+  detectBannedAiCliches,
+  detectBannedOpenings,
+  detectFormattingViolations,
+  detectRomanticCliches,
+} from './contentUtils.js';
 
 export const TELEGRAM_API_MAX_CHARS = 4096;
 export const TELEGRAM_SAFE_CHAR_LIMIT = 3800;
@@ -171,23 +176,32 @@ export function runEditorialDiagnostics(
   const length = measurePublicationLength(pub);
   const tagCheck = validateHashtags(pub.hashtags, pub.body);
 
-  // 1. Headline check (Dzen 140-char first sentence rule)
-  const headlineOk = !length.headlineExceeds140 && pub.title.trim().length >= 8;
+  // 1. Headline check (Dzen 140-char first sentence rule & no colon constructs)
+  const hasColonInTitle = /:/.test(pub.title);
+  const headlineOk = !length.headlineExceeds140 && pub.title.trim().length >= 8 && !hasColonInTitle;
   if (!headlineOk) {
-    notes.push(
-      `Первое предложение (заголовок для Дзена) составляет ${length.firstSentenceLength} симв. (нужно 8–140 симв.).`
-    );
+    if (hasColonInTitle) {
+      notes.push('Уберите двоеточие из заголовка (запрещены конструкции вида «А или Б: почему В»).');
+    } else {
+      notes.push(
+        `Первое предложение (заголовок для Дзена) составляет ${length.firstSentenceLength} симв. (нужно 8–140 симв.).`
+      );
+    }
   }
 
-  // 2. Spelling / typography checks (double spaces, mixed latin/cyrillic inside word, markdown artifacts)
+  // 2. Spelling / typography checks (double spaces, mixed latin/cyrillic inside word, markdown/emoji/list artifacts)
   const rawAll = `${pub.title}\n${pub.body}\n${pub.closingQuestion || ''}`;
   const hasDoubleSpaces = / {2,}/.test(pub.body);
   const hasMixedScriptWord = /[а-яё][a-z]|[a-z][а-яё]/i.test(rawAll);
   const hasRawMarkdown = /(\*\*|__|```|\[.+\]\(http)/.test(rawAll);
-  const spellingOk = !hasMixedScriptWord && !hasRawMarkdown;
+  const hasEmoji = /\p{Extended_Pictographic}/u.test(rawAll);
+  const hasBulletList = /(?:^|\n)\s*(?:[-*•▪◦]|\d+[.)])\s+/.test(pub.body);
+  const spellingOk = !hasMixedScriptWord && !hasRawMarkdown && !hasEmoji && !hasBulletList;
   if (hasDoubleSpaces) notes.push('Найдены двойные пробелы в тексте.');
   if (hasMixedScriptWord) notes.push('Обнаружена возможная опечатка со смешением латиницы и кириллицы в одном слове.');
-  if (hasRawMarkdown) notes.push('Уберите Markdown-разметку (** / __ / ссылки): при синхронизации из Telegram в Дзен форматирование теряется.');
+  if (hasRawMarkdown) notes.push('Уберите жирные выделения и Markdown (** / __ / ссылки) — нужен чистый живой текст.');
+  if (hasEmoji) notes.push('Уберите эмодзи из текста публикации.');
+  if (hasBulletList) notes.push('Уберите списки с буллитами или нумерацией — пишите связными короткими абзацами.');
 
   // 3. Repetition check (repeated sentences or consecutive identical words)
   const sentences = pub.body
@@ -211,12 +225,20 @@ export function runEditorialDiagnostics(
     notes.push('Разбейте текст минимум на 2 содержательных абзаца (от 200 символов).');
   }
 
-  // 5. MELO_LOVE style check
+  // 5. MELO_LOVE style & stop-list check
   const banned = detectBannedOpenings(pub.body);
   const cliches = pub.collection === 'romantic' ? detectRomanticCliches(rawAll) : [];
-  const meloStyleOk = banned.length === 0 && cliches.length === 0;
+  const stopListHits = detectBannedAiCliches(rawAll);
+  const formatHits = detectFormattingViolations({
+    title: pub.title,
+    body: pub.body,
+    triggerQuestion: pub.closingQuestion,
+  });
+  const meloStyleOk =
+    banned.length === 0 && cliches.length === 0 && stopListHits.length === 0 && formatHits.length === 0;
   if (banned.length > 0) notes.push(`Шаблонное начало: "${banned[0]}"`);
   if (cliches.length > 0) notes.push(`Романтическое клише: "${cliches[0]}"`);
+  if (stopListHits.length > 0) notes.push(`Стоп-лист: "${stopListHits.join('", "')}"`);
 
   // 6. Hashtags check
   const hashtagsOk = tagCheck.valid;

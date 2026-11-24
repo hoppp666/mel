@@ -9,11 +9,11 @@ import {
 } from '../src/shared/types.js';
 import {
   calculateContentQuality,
+  cleanEditorialFormatting,
   CONTENT_LENGTH_PRESETS,
   countWords,
   extractEndingPattern,
   extractOpeningPattern,
-  sanitizeKramarovskyDashes,
 } from '../src/shared/contentUtils.js';
 import {
   callChatCompletionJson,
@@ -34,6 +34,7 @@ import {
   selectActivePhrasebookHints,
   selectDiverseNarrativeStructure,
 } from './voiceEngine.js';
+import { loadResearchResults } from './researchStorage.js';
 import { loadDatabase } from './storage.js';
 
 let activeGenerationAbort: AbortController | null = null;
@@ -79,10 +80,10 @@ async function callAiForDraft(params: {
 
 Верни строго валидный JSON-объект (без пояснений вне JSON) со следующими полями:
 {
-  "title": "строка — цепляющий заголовок без длинных тире",
-  "subtitle": "строка — короткий анонс в 1 предложение",
-  "body": "строка — основной текст публикации с живыми абзацами через \\n\\n, БЕЗ единого длинного тире (—) или среднего тире (–)",
-  "triggerQuestion": "строка — сильный финальный вопрос к читателю",
+  "title": "строка — цепляющий разговорный заголовок БЕЗ двоеточий (:) и БЕЗ конструкций «А или Б: почему произошло В»",
+  "subtitle": "строка — короткий анонс в 1 живое предложение",
+  "body": "строка — основной текст короткими абзацами по 2–4 строки через \\n\\n, в живом рваном ритме с тире (—), парцелляцией и скобками. БЕЗ буллитов, БЕЗ **жирного текста** и БЕЗ эмодзи",
+  "triggerQuestion": "строка — короткий живой вопрос в конце без пафоса и морали (или пустая строка, если история обрывается прямо на кульминации в конце body)",
   "aiComment": "строка — короткий самоаудит редактора",
   "aiBreakdown": {
     "hookStrength": 0..15,
@@ -120,10 +121,10 @@ async function callAiForDraft(params: {
 
     return {
       ...parsed,
-      title: sanitizeKramarovskyDashes(String(parsed.title)),
-      subtitle: sanitizeKramarovskyDashes(String(parsed.subtitle || '')),
-      body: sanitizeKramarovskyDashes(String(parsed.body)),
-      triggerQuestion: sanitizeKramarovskyDashes(String(parsed.triggerQuestion || '')),
+      title: cleanEditorialFormatting(String(parsed.title)),
+      subtitle: cleanEditorialFormatting(String(parsed.subtitle || '')),
+      body: cleanEditorialFormatting(String(parsed.body)),
+      triggerQuestion: cleanEditorialFormatting(String(parsed.triggerQuestion || '')),
     };
   } catch (err) {
     throw formatAiError(err);
@@ -131,6 +132,13 @@ async function callAiForDraft(params: {
 }
 
 function buildStoryFactSheet(story: StoryPlot): string {
+  const researchMatch = story.researchId
+    ? loadResearchResults().find((r) => r.researchId === story.researchId)
+    : undefined;
+  const originalSourceBlock = researchMatch
+    ? `\n- Оригинальный заголовок/подача (${researchMatch.sourceName}): ${researchMatch.sourceTitle}\n- Выдержка из первоисточника (ориентир по тону, деталям и повествованию от 1-го лица «Я...», если оно там есть): ${researchMatch.sourceExcerpt || researchMatch.sourceSummary}`
+    : '';
+
   return `ИСХОДНАЯ СЮЖЕТНАЯ ОСНОВА (${story.id}):
 - Коллекция: ${story.collection} (${story.category} / ${story.subcategory})
 - Участники: ${story.participants}
@@ -139,12 +147,11 @@ function buildStoryFactSheet(story: StoryPlot): string {
 - Ключевой конфликт/поступок: ${story.coreConflictOrAction}
 - Позиция стороны A: ${story.sideAPosition}
 - Позиция стороны B: ${story.sideBPosition}
-- Эмоциональный механизм: ${story.emotionalMechanism}
-- Скрытое ожидание: ${story.hiddenExpectation}
-- Неожиданный нюанс (ОБЯЗАТЕЛЬНО сохранить): ${story.unexpectedNuance}
+- Бытовая деталь / неожиданный нюанс (ОБЯЗАТЕЛЬНО сохранить): ${story.unexpectedNuance}
+- Уникальные детали: ${story.uniqueDetails || 'нет доп. заметок'}
 - Возможный поворот: ${story.possibleTwist}
 - Базовый вопрос: ${story.mainTriggerQuestion}
-- Ключевые слова: ${story.keywords.join(', ')}`;
+- Ключевые слова: ${story.keywords.join(', ')}${originalSourceBlock}`;
 }
 
 export async function generatePublicationsFromStory(params: {
@@ -232,7 +239,7 @@ ${
     ? `Это вариант #${v + 1} из ${variantsCount}. Используй принципиально другой угол подачи и зачин (${style}).`
     : ''
 }
-Напиши живую публикацию объёмом ${lengthMeta.minWords}–${lengthMeta.maxWords} слов, оцени её по рубрике (hookStrength 0-15, languageNaturalness 0-15, emotionalImpact 0-15, plotDepth 0-15, narrativeUniqueness 0-15, voiceRecognition 0-10, endingQuality 0-10, sourceFidelity 0-5) и верни JSON.`;
+Напиши живой пост для Telegram и Дзена объёмом ${lengthMeta.minWords}–${lengthMeta.maxWords} слов. Передай смысл, бытовые детали и нерв истории, избегай стоп-листа (психологического новояза, канцелярита и морали), пиши короткими абзацами по 2–4 строки с рваным ритмом, тире (—) и скобками. Оцени текст по рубрике (hookStrength 0-15, languageNaturalness 0-15, emotionalImpact 0-15, plotDepth 0-15, narrativeUniqueness 0-15, voiceRecognition 0-10, endingQuality 0-10, sourceFidelity 0-5) и верни JSON.`;
 
       let payload = await callAiForDraft({
         systemInstruction,
@@ -265,7 +272,7 @@ ${
 Вопрос: ${payload.triggerQuestion}
 
 ${buildStoryFactSheet(story)}
-Убери любые клише, перефразируй зачин и сохрани все важные детали.`;
+Убери любые слова из стоп-листа и психологический новояз, убери двоеточия из заголовка, убери буллиты/жирный шрифт/эмодзи, сделай завязку в 1–2 предложения сразу в суть конфликта, сохрани живые бытовые детали и формат коротких абзацев по 2–4 строки.`;
 
         const refinedPayload = await callAiForDraft({
           systemInstruction,
@@ -348,16 +355,16 @@ ${buildStoryFactSheet(story)}
 }
 
 const REWRITE_MODE_INSTRUCTIONS: Record<RewriteMode, string> = {
-  more_lively: 'Сделай сцену живее: добавь ритм, конкретный жест или взгляд, убери канцелярит.',
-  more_conversational: 'Перепиши более разговорным, тёплым человеческим языком без грубого сленга.',
-  sharpen_hook: 'Полностью перепиши первый абзац и заголовок, чтобы зацепить с первой секунды.',
-  softer_romantic: 'Смягчи подачу, убери резкость и сфокусируйся на бережной эмоциональной детали.',
-  sharper_debate: 'Усиль аргументацию обеих сторон и остроту противоречия, чтобы читатели спорили в комментариях.',
-  shorten: 'Сократи объём примерно на 30%, оставив только самую сильную конкретику.',
-  expand: 'Расширь текст на 30% за счёт атмосферы, диалога и внутренней мотивации героев.',
-  change_opening: 'Полностью смени угол входа в историю и первый абзац.',
-  change_ending: 'Перепиши финал и триггерный вопрос так, чтобы оставить сильное послевкусие.',
-  remove_ai_feel: 'Вычисти все ровные нейросетевые связки, штампы и подытоживания, оставь живую речь.',
+  more_lively: 'Сделай текст живее: добавь рваный ритм, парцелляцию, тире (—), конкретные действия и жесты вместо оценок.',
+  more_conversational: 'Перепиши как живой рассказ знакомому на кухне: разговорные частицы («ну», «в общем», «короче», «вроде как»), скобки для побочных мыслей, без подросткового сленга.',
+  sharpen_hook: 'Полностью перепиши заголовок (разговорный, без двоеточия) и завязку в 1–2 предложения, чтобы сразу бросить в суть конфликта.',
+  softer_romantic: 'Убери пафос и психологические ярлыки, сфокусируйся на тихой бытовой детали, запахе, взгляде или случайной реплике.',
+  sharper_debate: 'Покажи правду и живые эмоции обеих сторон через конкретные слова и поступки, без назидательной морали.',
+  shorten: 'Сократи объём примерно на 30%, оставив только самую острую бытовую конкретику и короткие абзацы по 2–4 строки.',
+  expand: 'Расширь текст на 30% за счёт живых деталей сцены, коротких реплик и бытовых мелочей из исходника.',
+  change_opening: 'Полностью смени угол входа: начни сразу с действия, реплики или бытовой детали в 1–2 предложениях.',
+  change_ending: 'Убери любую мораль в конце: оборви историю на кульминации или оставь один простой живой вопрос («И вот кто тут не прав?»).',
+  remove_ai_feel: 'Вычисти весь стоп-лист, психологический новояз («границы», «токсичный», «абьюз», «красные флаги»), вводные штампы, буллиты и эмодзи; оставь живую человеческую речь с лёгкой шероховатостью.',
 };
 
 export async function rewriteExistingDraft(

@@ -45,6 +45,7 @@ export const BANNED_OPENING_PATTERNS: RegExp[] = [
   /^сегодня\s+хочу\s+рассказать\s+(вам\s+)?историю/i,
   /^как\s+часто\s+мы\s+задумываемся/i,
   /^все\s+мы\s+знаем,?\s+что\s+отношения/i,
+  /^давайте\s+смотреть\s+правде\s+в\s+глаза/i,
 ];
 
 export const ROMANTIC_CLICHE_PATTERNS: RegExp[] = [
@@ -59,13 +60,37 @@ export const ROMANTIC_CLICHE_PATTERNS: RegExp[] = [
 ];
 
 export const AI_BANNED_CLICHE_PATTERNS: RegExp[] = [
+  // Вводные штампы и канцелярит
+  /давайте\s+смотреть\s+правде\s+в\s+глаза/i,
+  /и\s+вот\s+тут\s+начинается\s+самое\s+интересное/i,
+  /тут\s+ведь\s+какая\s+(?:штука|история)/i,
+  /пища\s+для\s+ума/i,
+  /в\s+итоге\s+мы\s+имеем/i,
+  /не\s+секрет,?\s+что/i,
+  /важно\s+понимать/i,
+  /стоит\s+отметить/i,
+  /давайте\s+по-честному/i,
+  /понимаете,?\s+в\s+ч[её]м\s+штука/i,
   /в\s+современном\s+мире/i,
   /важно\s+отметить/i,
   /подводя\s+итог/i,
-  /не\s+секрет,?\s+что/i,
   /данный\s+фактор/i,
   /ключевую\s+роль\s+играет/i,
   /таким\s+образом/i,
+  // Психологические клише
+  /личн(?:ые|ых|ым|ыми)\s+границ(?:а|е|у|ы|ах|ами)?/i,
+  /токсичн[а-яё]*/i,
+  /абьюз[а-яё]*/i,
+  /эмоциональн(?:ый|ого|ому|ым|ом)\s+импульс[а-яё]*/i,
+  /нарушени(?:е|я|ю|ем|и)\s+табу/i,
+  /эгоизм\s+в\s+красивой\s+об[её]ртке/i,
+  /(?:выйти\s+из\s+)?зон[ауеы]\s+комфорта/i,
+  /проработа(?:ть|л|ла|ли|ем|йте|ют)\s+травм[а-яё]*/i,
+  /красн(?:ые|ый|ых|ыми)\s+флаг(?:и|ов|ами)?/i,
+  // Искусственные метафоры
+  /зон(?:а|у|е|ой)\s+боевых\s+действий/i,
+  /жизнь\s+превратилась\s+в\s+(?:пытку|тюрьму)/i,
+  /акт(?:ом|а|у|е)?\s+доброты/i,
 ];
 
 export function sanitizeKramarovskyDashes(text: string): string {
@@ -78,16 +103,50 @@ export function sanitizeKramarovskyDashes(text: string): string {
     .replace(/([.!?…])\s*,\s*/g, '$1 ');
 }
 
+export function cleanEditorialFormatting(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/\p{Extended_Pictographic}/gu, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function detectBannedAiCliches(text: string): string[] {
   const hits: string[] = [];
   for (const re of AI_BANNED_CLICHE_PATTERNS) {
     const m = text.match(re);
     if (m) hits.push(m[0]);
   }
-  if (/[—–]/.test(text)) {
-    hits.push('длинное или среднее тире (—/–)');
-  }
   return hits;
+}
+
+export function detectFormattingViolations(params: {
+  title?: string;
+  body?: string;
+  triggerQuestion?: string;
+}): string[] {
+  const issues: string[] = [];
+  const title = (params.title || '').trim();
+  const body = (params.body || '').trim();
+  const full = `${title}\n${body}\n${params.triggerQuestion || ''}`;
+
+  if (title && /:/.test(title)) {
+    issues.push('двоеточие в заголовке (запрещено конструктами «А или Б: почему В»)');
+  }
+  if (/(?:^|\n)\s*(?:[-*•▪◦]|\d+[.)])\s+/.test(body)) {
+    issues.push('список с буллитами или нумерацией');
+  }
+  if (/\*\*[^*]+\*\*|__[^_]+__/.test(full)) {
+    issues.push('жирное выделение (** / __) внутри текста');
+  }
+  if (/\p{Extended_Pictographic}/u.test(full)) {
+    issues.push('эмодзи в тексте');
+  }
+
+  return issues;
 }
 
 export function countWords(text: string): number {
@@ -239,6 +298,7 @@ export function calculateContentQuality(params: {
   const bannedOpenings = detectBannedOpenings(body);
   const cliches = collection === 'romantic' ? detectRomanticCliches(fullText) : [];
   const aiCliches = detectBannedAiCliches(fullText);
+  const formattingIssues = detectFormattingViolations({ title, body, triggerQuestion });
   const verbatim = hasVerbatimPlotCopy(body, sourceStory.fullPlot);
   const phraseCheck = detectPhraseOveruse(fullText, phrasebook);
 
@@ -265,7 +325,8 @@ export function calculateContentQuality(params: {
   const details: string[] = [];
   if (bannedOpenings.length > 0) details.push(`Шаблонный зачин: "${bannedOpenings[0]}"`);
   if (cliches.length > 0) details.push(`Романтический штамп: "${cliches[0]}"`);
-  if (aiCliches.length > 0) details.push(`Запрещённый маркер ИИ: ${aiCliches.join(', ')}`);
+  if (aiCliches.length > 0) details.push(`Стоп-лист (клише / новояз): ${aiCliches.join(', ')}`);
+  if (formattingIssues.length > 0) details.push(`Нарушение формата поста: ${formattingIssues.join(', ')}`);
   if (verbatim.isVerbatim) details.push('Высокое дословное совпадение с исходным fullPlot');
   if (phraseCheck.bannedUsed.length > 0) details.push(`Запрещённая фраза: ${phraseCheck.bannedUsed.join(', ')}`);
   if (phraseCheck.overused.length > 0) details.push(`Превышен лимит фраз за 10 постов: ${phraseCheck.overused.join(', ')}`);
@@ -277,7 +338,8 @@ export function calculateContentQuality(params: {
       Boolean(aiPenalties?.soundsLikeAiTemplate) ||
       bannedOpenings.length > 0 ||
       cliches.length > 0 ||
-      aiCliches.length > 0,
+      aiCliches.length > 0 ||
+      formattingIssues.length > 0,
     artificialColloquialism: Boolean(aiPenalties?.artificialColloquialism),
     phraseOveruse:
       Boolean(aiPenalties?.phraseOveruse) ||
@@ -296,7 +358,7 @@ export function calculateContentQuality(params: {
 
   const breakdown = {
     hookStrength: clampMax(aiBreakdown?.hookStrength, 15, bannedOpenings.length ? 7 : 13),
-    languageNaturalness: clampMax(aiBreakdown?.languageNaturalness, 15, cliches.length ? 8 : 13),
+    languageNaturalness: clampMax(aiBreakdown?.languageNaturalness, 15, cliches.length || aiCliches.length ? 8 : 13),
     emotionalImpact: clampMax(aiBreakdown?.emotionalImpact, 15, 13),
     plotDepth: clampMax(aiBreakdown?.plotDepth, 15, 13),
     narrativeUniqueness: clampMax(aiBreakdown?.narrativeUniqueness, 15, repeatedPattern || verbatim.isVerbatim ? 7 : 13),
@@ -329,8 +391,8 @@ export function calculateContentQuality(params: {
     editorialComment:
       aiComment ||
       (overall >= minScore
-        ? 'Текст держит ритм, сохраняет жизненную деталь и соответствует голосу MELO_LOVE.'
-        : 'Требуется доработка: усилить зачин, убрать штампы или точнее передать нюанс сюжета.'),
+        ? 'Текст звучит по-человечески, держит рваный ритм, сохраняет бытовые детали и формат MELO_LOVE.'
+        : 'Требуется доработка: убрать слова из стоп-листа, поправить заголовок/форматирование или точнее передать живые детали.'),
     passedThreshold: overall >= minScore,
   };
 }
