@@ -1,8 +1,6 @@
-import test, { after, before } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
-import os from 'os';
-import path from 'path';
 import {
   DZEN_HEADLINE_MAX_CHARS,
   formatPublicationForTelegram,
@@ -17,46 +15,28 @@ import {
   validateBeforeTelegramSend,
 } from '../server/telegramPublisher.js';
 import {
-  getPublicationsPath,
-  getPublishingLogsPath,
-  getPublishingSettingsPath,
   getTelegramIntegrationStatus,
   loadPublications,
   loadPublishingLogs,
+  PUBLICATIONS_PATH,
+  PUBLISHING_LOGS_PATH,
+  PUBLISHING_SETTINGS_PATH,
   recoverInterruptedPublications,
   savePublications,
 } from '../server/publishingStorage.js';
-import { getDbPath, loadDatabase, setDataDirForTest } from '../server/storage.js';
-import { saveContentDrafts } from '../server/contentStorage.js';
 import { getGeminiClient, isGeminiConfigured } from '../server/geminiClient.js';
 import {
   callChatCompletionJson,
   resolveGeminiModelList,
   resolveGigaChatCredentials,
-  resolveZaiCredentials,
   setGigaChatTransportForTest,
 } from '../server/aiClient.js';
 import {
   prepareOrRunSupabaseMigration,
-  repairOrphanedReferences,
   verifyAllDataIntegrity,
 } from '../server/supabaseMigration.js';
-import { ContentDraft, PublicationItem } from '../src/shared/types.js';
+import { PublicationItem } from '../src/shared/types.js';
 import { buildDebateSeeds } from '../server/seedDebate.js';
-
-let tmpDataDir = '';
-
-before(() => {
-  tmpDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'melo-publishing-test-'));
-  setDataDirForTest(tmpDataDir);
-});
-
-after(() => {
-  setDataDirForTest(null);
-  if (tmpDataDir) {
-    fs.rmSync(tmpDataDir, { recursive: true, force: true });
-  }
-});
 
 function makePublication(overrides: Partial<PublicationItem> = {}): PublicationItem {
   const story = buildDebateSeeds()[0];
@@ -200,12 +180,9 @@ test('validateBeforeTelegramSend blocks >3800 chars, >1024 image caption, and du
 });
 
 test('dispatchPublicationToTelegram handles dry-run, live send (-> zen_delivery_unconfirmed), token masking, and failure', async () => {
-  const pubsPath = getPublicationsPath();
-  const settingsPath = getPublishingSettingsPath();
-  const logsPath = getPublishingLogsPath();
-  const snapPubs = snapshotFile(pubsPath);
-  const snapSettings = snapshotFile(settingsPath);
-  const snapLogs = snapshotFile(logsPath);
+  const snapPubs = snapshotFile(PUBLICATIONS_PATH);
+  const snapSettings = snapshotFile(PUBLISHING_SETTINGS_PATH);
+  const snapLogs = snapshotFile(PUBLISHING_LOGS_PATH);
   const prevToken = process.env.TELEGRAM_BOT_TOKEN;
   const prevChannel = process.env.TELEGRAM_CHANNEL_ID;
 
@@ -272,17 +249,15 @@ test('dispatchPublicationToTelegram handles dry-run, live send (-> zen_delivery_
     else process.env.TELEGRAM_BOT_TOKEN = prevToken;
     if (prevChannel === undefined) delete process.env.TELEGRAM_CHANNEL_ID;
     else process.env.TELEGRAM_CHANNEL_ID = prevChannel;
-    restoreFile(pubsPath, snapPubs);
-    restoreFile(settingsPath, snapSettings);
-    restoreFile(logsPath, snapLogs);
+    restoreFile(PUBLICATIONS_PATH, snapPubs);
+    restoreFile(PUBLISHING_SETTINGS_PATH, snapSettings);
+    restoreFile(PUBLISHING_LOGS_PATH, snapLogs);
   }
 });
 
 test('recoverInterruptedPublications resets stale sending items to failed', () => {
-  const pubsPath = getPublicationsPath();
-  const settingsPath = getPublishingSettingsPath();
-  const snapPubs = snapshotFile(pubsPath);
-  const snapSettings = snapshotFile(settingsPath);
+  const snapPubs = snapshotFile(PUBLICATIONS_PATH);
+  const snapSettings = snapshotFile(PUBLISHING_SETTINGS_PATH);
   try {
     const stuck = makePublication({ publicationId: 'PUB-D-999201', status: 'sending' });
     savePublications([stuck]);
@@ -291,110 +266,31 @@ test('recoverInterruptedPublications resets stale sending items to failed', () =
     assert.equal(after.status, 'failed');
     assert.match(after.error || '', /прервана/i);
   } finally {
-    restoreFile(pubsPath, snapPubs);
-    restoreFile(settingsPath, snapSettings);
+    restoreFile(PUBLICATIONS_PATH, snapPubs);
+    restoreFile(PUBLISHING_SETTINGS_PATH, snapSettings);
   }
 });
 
 test('verifyAllDataIntegrity & prepareOrRunSupabaseMigration create 4-module backups without deleting local JSON', async () => {
-  const db = loadDatabase();
-  const story = db.stories[0];
-  const now = new Date().toISOString();
-  const validDraft: ContentDraft = {
-    contentId: 'ML-P-D-000001',
-    sourceStoryId: story.id,
-    collection: story.collection,
-    category: story.category,
-    subcategory: story.subcategory,
-    title: 'Проверка целостности базы',
-    subtitle: '',
-    body: 'Первый абзац истории.\n\nВторой абзац истории.',
-    triggerQuestion: 'Как бы вы поступили?',
-    wordCount: 6,
-    lengthPreset: 'standard',
-    narrativeStyle: 'action_start',
-    voicePresetId: 'melo-standard',
-    usedPhraseIds: [],
-    usedPhrases: [],
-    openingPattern: 'Первый абзац истории',
-    endingPattern: 'Второй абзац истории',
-    status: 'approved',
-    quality: {
-      overall: 88,
-      breakdown: {
-        hookStrength: 88,
-        languageNaturalness: 88,
-        emotionalImpact: 88,
-        plotDepth: 88,
-        narrativeUniqueness: 88,
-        voiceRecognition: 88,
-        endingQuality: 88,
-        sourceFidelity: 88,
-      },
-      penalties: {
-        hasMeaninglessRepetition: false,
-        soundsLikeAiTemplate: false,
-        artificialColloquialism: false,
-        phraseOveruse: false,
-        contradictsSource: false,
-        lostImportantDetail: false,
-        artificialEnding: false,
-        unsubstantiatedClaims: false,
-        verbatimCopy: false,
-        details: [],
-      },
-      editorialComment: 'OK',
-      passedThreshold: true,
-    },
-    autoRefined: false,
-    completenessAuditNote: 'OK',
-    originType: story.originType,
-    revisionHistory: [],
-    createdAt: now,
-    updatedAt: now,
-  };
-  saveContentDrafts([validDraft]);
-  savePublications([
-    makePublication({
-      publicationId: 'PUB-D-000001',
-      sourceStoryId: story.id,
-      sourceDraftId: validDraft.contentId,
-    }),
-  ]);
-
   const integrity = verifyAllDataIntegrity();
-  assert.deepEqual(integrity.integrityErrors, []);
+  assert.equal(integrity.integrityErrors.length, 0);
   assert.ok(integrity.counts.stories >= 50);
-
-  // Verify repairOrphanedReferences clears deleted draft links cleanly
-  saveContentDrafts([]);
-  const beforeRepair = verifyAllDataIntegrity();
-  assert.equal(beforeRepair.integrityErrors.length, 1);
-  const repaired = repairOrphanedReferences();
-  assert.equal(repaired.clearedDraftLinks, 1);
-  const afterRepair = verifyAllDataIntegrity();
-  assert.deepEqual(afterRepair.integrityErrors, []);
 
   const report = await prepareOrRunSupabaseMigration({ executeLiveSync: false });
   assert.equal(report.ready, true);
-  assert.deepEqual(report.integrityErrors, []);
+  assert.equal(report.integrityErrors.length, 0);
   assert.ok(report.backupsCreated.database);
   assert.ok(report.backupsCreated.research);
   assert.ok(report.backupsCreated.content);
   assert.ok(report.backupsCreated.publishing);
-  assert.equal(fs.existsSync(getDbPath()), true);
+  assert.equal(fs.existsSync('data/melo_love_db.json'), true);
   assert.equal(fs.existsSync('supabase/schema.sql'), true);
-
-  savePublications([]);
 });
 
 test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, TELEGRAM_BOT_TOKEN, and SUPABASE_* are unset', async () => {
-  const pubsPath = getPublicationsPath();
-  const settingsPath = getPublishingSettingsPath();
-  const logsPath = getPublishingLogsPath();
-  const snapPubs = snapshotFile(pubsPath);
-  const snapSettings = snapshotFile(settingsPath);
-  const snapLogs = snapshotFile(logsPath);
+  const snapPubs = snapshotFile(PUBLICATIONS_PATH);
+  const snapSettings = snapshotFile(PUBLISHING_SETTINGS_PATH);
+  const snapLogs = snapshotFile(PUBLISHING_LOGS_PATH);
   const prevGemini = process.env.GEMINI_API_KEY;
   const prevGigaAuth = process.env.GIGACHAT_AUTH_KEY;
   const prevGigaCreds = process.env.GIGACHAT_CREDENTIALS;
@@ -402,8 +298,6 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
   const prevGigaClientId = process.env.GIGACHAT_CLIENT_ID;
   const prevGigaClientSecret = process.env.GIGACHAT_CLIENT_SECRET;
   const prevGigaScope = process.env.GIGACHAT_SCOPE;
-  const prevZaiKey = process.env.ZAI_API_KEY;
-  const prevZhipuKey = process.env.ZHIPU_API_KEY;
   const prevGroq = process.env.GROQ_API_KEY;
   const prevAiKey = process.env.AI_API_KEY;
   const prevGroqEndpoint = process.env.GROQ_API_ENDPOINT;
@@ -422,8 +316,6 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
     delete process.env.GIGACHAT_CLIENT_ID;
     delete process.env.GIGACHAT_CLIENT_SECRET;
     delete process.env.GIGACHAT_SCOPE;
-    delete process.env.ZAI_API_KEY;
-    delete process.env.ZHIPU_API_KEY;
     delete process.env.GROQ_API_KEY;
     delete process.env.AI_API_KEY;
     delete process.env.GROQ_API_ENDPOINT;
@@ -439,13 +331,12 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
     assert.equal(status.hasGeminiConfigured, false);
     assert.equal(status.hasGeminiPrimaryConfigured, false);
     assert.equal(status.hasGigaChatConfigured, false);
-    assert.equal(status.hasZaiConfigured, false);
     assert.equal(status.hasBotTokenConfigured, false);
     assert.equal(status.hasSupabaseConfigured, false);
 
     // 2. AI API check reports unconfigured calmly, without crashing module
     assert.equal(isGeminiConfigured(), false);
-    assert.throws(() => getGeminiClient(), /API_KEY_MISSING|GEMINI_API_KEY|GIGACHAT_AUTH_KEY|ZAI_API_KEY/);
+    assert.throws(() => getGeminiClient(), /API_KEY_MISSING|GEMINI_API_KEY|GIGACHAT_AUTH_KEY/);
 
     // 3. Telegram connection check returns structured non-throwing note
     const tgTest = await testTelegramConnection();
@@ -479,10 +370,6 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
     else process.env.GIGACHAT_CLIENT_SECRET = prevGigaClientSecret;
     if (prevGigaScope === undefined) delete process.env.GIGACHAT_SCOPE;
     else process.env.GIGACHAT_SCOPE = prevGigaScope;
-    if (prevZaiKey === undefined) delete process.env.ZAI_API_KEY;
-    else process.env.ZAI_API_KEY = prevZaiKey;
-    if (prevZhipuKey === undefined) delete process.env.ZHIPU_API_KEY;
-    else process.env.ZHIPU_API_KEY = prevZhipuKey;
     if (prevGroq === undefined) delete process.env.GROQ_API_KEY;
     else process.env.GROQ_API_KEY = prevGroq;
     if (prevAiKey === undefined) delete process.env.AI_API_KEY;
@@ -501,9 +388,9 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
     else process.env.SUPABASE_URL = prevSupaUrl;
     if (prevSupaKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     else process.env.SUPABASE_SERVICE_ROLE_KEY = prevSupaKey;
-    restoreFile(pubsPath, snapPubs);
-    restoreFile(settingsPath, snapSettings);
-    restoreFile(logsPath, snapLogs);
+    restoreFile(PUBLICATIONS_PATH, snapPubs);
+    restoreFile(PUBLISHING_SETTINGS_PATH, snapSettings);
+    restoreFile(PUBLISHING_LOGS_PATH, snapLogs);
   }
 });
 
@@ -592,67 +479,5 @@ test('Gemini model cascade includes free fallback and GigaChat OAuth + model fai
     else process.env.GIGACHAT_AUTH_KEY = prevGigaAuth;
     if (prevGigaScope === undefined) delete process.env.GIGACHAT_SCOPE;
     else process.env.GIGACHAT_SCOPE = prevGigaScope;
-  }
-});
-
-test('Z.ai additional backup provider defaults to glm-4.7-flash -> glm-4.5-flash and fails over cleanly', async () => {
-  const prevGemini = process.env.GEMINI_API_KEY;
-  const prevGigaAuth = process.env.GIGACHAT_AUTH_KEY;
-  const prevZaiKey = process.env.ZAI_API_KEY;
-  const prevZaiModel = process.env.ZAI_MODEL;
-  const prevFetch = globalThis.fetch;
-
-  try {
-    delete process.env.GEMINI_API_KEY;
-    delete process.env.GIGACHAT_AUTH_KEY;
-    delete process.env.ZAI_MODEL;
-    process.env.ZAI_API_KEY = 'zai-test-key-xyz';
-
-    const creds = resolveZaiCredentials();
-    assert.equal(creds.apiKey, 'zai-test-key-xyz');
-    assert.equal(creds.endpoint, 'https://api.z.ai/api/paas/v4/chat/completions');
-    assert.deepEqual(creds.models, ['glm-4.7-flash', 'glm-4.5-flash']);
-
-    const calls: Array<{ url: string; model: string; auth: string | null }> = [];
-    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-      const headers = new Headers(init?.headers);
-      const parsedBody = JSON.parse(String(init?.body || '{}')) as { model: string };
-      calls.push({
-        url: String(url),
-        model: parsedBody.model,
-        auth: headers.get('Authorization'),
-      });
-      if (calls.length === 1) {
-        return new Response(JSON.stringify({ error: { message: 'Busy' } }), { status: 429 });
-      }
-      return new Response(
-        JSON.stringify({
-          choices: [{ message: { content: '{"ok":true,"provider":"zai-flash"}' } }],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
-    }) as typeof fetch;
-
-    const result = await callChatCompletionJson<{ ok: boolean; provider: string }>({
-      systemInstruction: 'Тест JSON',
-      userPrompt: 'Верни JSON',
-    });
-
-    assert.deepEqual(result, { ok: true, provider: 'zai-flash' });
-    assert.equal(calls.length, 2);
-    assert.equal(calls[0].url, 'https://api.z.ai/api/paas/v4/chat/completions');
-    assert.equal(calls[0].model, 'glm-4.7-flash');
-    assert.equal(calls[0].auth, 'Bearer zai-test-key-xyz');
-    assert.equal(calls[1].model, 'glm-4.5-flash');
-  } finally {
-    globalThis.fetch = prevFetch;
-    if (prevGemini === undefined) delete process.env.GEMINI_API_KEY;
-    else process.env.GEMINI_API_KEY = prevGemini;
-    if (prevGigaAuth === undefined) delete process.env.GIGACHAT_AUTH_KEY;
-    else process.env.GIGACHAT_AUTH_KEY = prevGigaAuth;
-    if (prevZaiKey === undefined) delete process.env.ZAI_API_KEY;
-    else process.env.ZAI_API_KEY = prevZaiKey;
-    if (prevZaiModel === undefined) delete process.env.ZAI_MODEL;
-    else process.env.ZAI_MODEL = prevZaiModel;
   }
 });

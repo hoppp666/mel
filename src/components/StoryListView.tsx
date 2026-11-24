@@ -1,159 +1,180 @@
 import React, { useMemo, useState } from 'react';
-import { Check, Plus, RotateCcw, Search, Sparkles } from 'lucide-react';
-import { getCategoriesForCollection } from '../shared/categories.ts';
-import { tokenizeNormalized } from '../shared/similarity.ts';
-import type { CollectionType, StoryPlot, VerificationStatus } from '../shared/types.ts';
+import {
+  Check,
+  ExternalLink,
+  Plus,
+  RotateCcw,
+  Search,
+  Trash2,
+} from 'lucide-react';
+import {
+  CollectionType,
+  CustomCategory,
+  OriginType,
+  StoryPlot,
+  UsageStatus,
+  VerificationStatus,
+} from '../shared/types.js';
+import { getCategoriesForCollection } from '../shared/categories.js';
 
 interface StoryListViewProps {
   collection: CollectionType;
   stories: StoryPlot[];
-  customCategories: { debate: string[]; romantic: string[] };
-  initialCategoryFilter?: string;
-  onSelectStory: (story: StoryPlot) => void;
-  onCreateStory: () => void;
-  onLaunchBatch: () => void;
-  onQuickStatus: (id: string, status: VerificationStatus) => Promise<void>;
+  customCategories: CustomCategory[];
+  onOpenStory: (story: StoryPlot) => void;
+  onCreateNew: (collection: CollectionType) => void;
+  onQuickStatus: (
+    storyId: string,
+    payload: { verificationStatus?: VerificationStatus; usageStatus?: UsageStatus }
+  ) => Promise<void>;
+  onDeleteStory: (storyId: string) => Promise<void>;
 }
 
-const STATUS_LABEL: Record<VerificationStatus, string> = {
-  approved: 'Проверен',
-  pending: 'Ожидает проверки',
+const VERIFICATION_LABEL: Record<VerificationStatus, string> = {
+  approved: 'Подтверждён',
+  pending: 'Ожидает',
   needs_revision: 'На доработке',
   rejected: 'Отклонён',
 };
 
-const STATUS_TEXT_COLOR: Record<VerificationStatus, string> = {
-  approved: 'text-emerald-700',
-  pending: 'text-slate-600',
-  needs_revision: 'text-amber-700',
-  rejected: 'text-red-700',
+const USAGE_LABEL: Record<UsageStatus, string> = {
+  unused: 'Не использован',
+  drafted: 'Есть черновик',
+  published: 'Опубликован',
+  archived: 'В архиве',
 };
 
 export const StoryListView: React.FC<StoryListViewProps> = ({
   collection,
   stories,
   customCategories,
-  initialCategoryFilter = 'ALL',
-  onSelectStory,
-  onCreateStory,
-  onLaunchBatch,
+  onOpenStory,
+  onCreateNew,
   onQuickStatus,
+  onDeleteStory,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState(initialCategoryFilter);
-  const [statusFilter, setStatusFilter] = useState<'ALL' | VerificationStatus>('ALL');
-  const [originFilter, setOriginFilter] = useState<'ALL' | 'original' | 'external'>('ALL');
-  const [minQuality, setMinQuality] = useState<number>(0);
-  const [sortBy, setSortBy] = useState<'newest' | 'quality_desc' | 'quality_asc'>('newest');
-
-  const categories = getCategoriesForCollection(collection, customCategories);
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | VerificationStatus>('all');
+  const [usageFilter, setUsageFilter] = useState<'all' | UsageStatus>('all');
+  const [originFilter, setOriginFilter] = useState<'all' | OriginType>('all');
+  const [minScore, setMinScore] = useState(0);
+  const [onlyDuplicates, setOnlyDuplicates] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const collectionStories = useMemo(
     () => stories.filter((s) => s.collection === collection),
     [stories, collection]
   );
 
+  const categories = useMemo(() => {
+    const base = getCategoriesForCollection(collection);
+    const custom = customCategories
+      .filter((c) => c.collection === collection)
+      .map((c) => c.name);
+    return Array.from(new Set([...base, ...custom]));
+  }, [collection, customCategories]);
+
   const filtered = useMemo(() => {
-    const queryLower = searchQuery.trim().toLowerCase();
-    const queryStems = queryLower ? tokenizeNormalized(queryLower) : [];
-
-    const items = collectionStories.filter((s) => {
-      if (categoryFilter !== 'ALL' && s.category !== categoryFilter) return false;
-      if (statusFilter !== 'ALL' && s.verificationStatus !== statusFilter) return false;
-      if (originFilter !== 'ALL' && s.originType !== originFilter) return false;
-      if ((s.quality?.overall ?? 0) < minQuality) return false;
-
-      if (queryLower) {
-        const haystack = [
-          s.id,
-          s.title,
-          s.shortDescription,
-          s.fullPlot,
-          s.category,
-          s.subcategory,
-          s.mainTheme,
-          s.plotMechanic,
-          s.coreConflictOrAction,
-          s.semanticFingerprint,
-          ...s.keywords,
-        ]
-          .join(' ')
-          .toLowerCase();
-
-        const directMatch = haystack.includes(queryLower);
-        const semanticMatch =
-          queryStems.length > 0 &&
-          queryStems.every((stem) => haystack.includes(stem));
-
-        if (!directMatch && !semanticMatch) return false;
-      }
-      return true;
-    });
-
-    return [...items].sort((a, b) => {
-      if (sortBy === 'quality_desc') return (b.quality?.overall ?? 0) - (a.quality?.overall ?? 0);
-      if (sortBy === 'quality_asc') return (a.quality?.overall ?? 0) - (b.quality?.overall ?? 0);
-      return b.id.localeCompare(a.id);
+    const q = search.trim().toLowerCase();
+    return collectionStories.filter((s) => {
+      if (categoryFilter !== 'all' && s.category !== categoryFilter) return false;
+      if (statusFilter !== 'all' && s.verificationStatus !== statusFilter) return false;
+      if (usageFilter !== 'all' && s.usageStatus !== usageFilter) return false;
+      if (originFilter !== 'all' && s.originType !== originFilter) return false;
+      if (minScore > 0 && (s.quality?.overall ?? 0) < minScore) return false;
+      if (onlyDuplicates && !s.duplicateFlag) return false;
+      if (!q) return true;
+      const haystack = [
+        s.id,
+        s.title,
+        s.category,
+        s.subcategory,
+        s.shortDescription,
+        s.mainTheme,
+        s.plotMechanic,
+        ...(s.keywords || []),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
     });
   }, [
     collectionStories,
-    searchQuery,
+    search,
     categoryFilter,
     statusFilter,
+    usageFilter,
     originFilter,
-    minQuality,
-    sortBy,
+    minScore,
+    onlyDuplicates,
   ]);
 
-  const title =
-    collection === 'debate'
-      ? 'Коллекция A — «Кто здесь прав?»'
-      : 'Коллекция B — «Романтические истории»';
+  const handleQuickAction = async (
+    storyId: string,
+    payload: { verificationStatus?: VerificationStatus; usageStatus?: UsageStatus }
+  ) => {
+    setBusyId(storyId);
+    try {
+      await onQuickStatus(storyId, payload);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
-  const subtitle =
-    collection === 'debate'
-      ? 'Неоднозначные жизненные конфликты ценностей, границ и ожиданий с аргументами обеих сторон.'
-      : 'Конкретные жизненные сцены, тёплые детали и тихие поступки, вызывающие узнавание и отклик.';
+  const handleDelete = async (storyId: string) => {
+    setBusyId(storyId);
+    try {
+      await onDeleteStory(storyId);
+      setConfirmDeleteId(null);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <div className="space-y-5">
-      {/* Section Heading & Controls */}
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
+      {/* Header strip */}
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 pb-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
-          <p className="mt-1 text-sm text-slate-600">{subtitle}</p>
+          <h2 className="text-xl font-semibold tracking-tight text-zinc-900">
+            {collection === 'debate'
+              ? 'Раздел 1 · Споры и мнения'
+              : 'Раздел 2 · Романтические и трогательные истории'}
+          </h2>
+          <p className="mt-1 text-sm text-zinc-600">
+            {collection === 'debate'
+              ? 'Жизненные ситуации с двумя сильными сторонами, дилеммами границ, денег и ожиданий.'
+              : 'Тёплые, неслащавые сюжеты о тихой заботе, памяти о мелочах и повседневной близости.'}
+          </p>
         </div>
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="text-right text-xs text-zinc-500 font-mono tabular-nums">
+            Показано {filtered.length} из {collectionStories.length}
+          </div>
           <button
             type="button"
-            onClick={onCreateStory}
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-800 hover:bg-slate-50 whitespace-nowrap"
+            onClick={() => onCreateNew(collection)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-zinc-800 whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <Plus className="h-3.5 w-3.5" />
-            Добавить вручную
-          </button>
-          <button
-            type="button"
-            onClick={onLaunchBatch}
-            className="inline-flex items-center gap-1.5 rounded-md bg-indigo-700 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-800 whitespace-nowrap"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            Создать следующую партию
+            <Plus className="h-4 w-4" />
+            Добавить сюжет вручную
           </button>
         </div>
       </div>
 
-      {/* Filters Toolbar */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+      {/* Filters toolbar */}
+      <div className="rounded-lg border border-stone-200 bg-white p-4 space-y-3">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
-          <div className="relative md:col-span-5">
-            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+          <div className="relative md:col-span-4">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
             <input
               type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Поиск по словам, смыслу, механике или ключевым словам..."
-              className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Поиск по ID, названию, механике, тегам..."
+              className="w-full rounded-md border border-stone-200 bg-stone-50/50 py-2 pl-9 pr-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:bg-white focus:outline-none"
             />
           </div>
 
@@ -161,9 +182,9 @@ export const StoryListView: React.FC<StoryListViewProps> = ({
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              className="w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-zinc-400 focus:outline-none"
             >
-              <option value="ALL">Все категории ({categories.length})</option>
+              <option value="all">Все категории ({categories.length})</option>
               {categories.map((cat) => (
                 <option key={cat} value={cat}>
                   {cat}
@@ -174,215 +195,281 @@ export const StoryListView: React.FC<StoryListViewProps> = ({
 
           <div className="md:col-span-2">
             <select
-              value={originFilter}
-              onChange={(e) =>
-                setOriginFilter(e.target.value as 'ALL' | 'original' | 'external')
-              }
-              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | VerificationStatus)}
+              className="w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-zinc-400 focus:outline-none"
             >
-              <option value="ALL">Все источники</option>
-              <option value="original">Оригинальные</option>
-              <option value="external">Зарубежные</option>
+              <option value="all">Любая проверка</option>
+              <option value="approved">Подтверждённые</option>
+              <option value="pending">Ожидают</option>
+              <option value="needs_revision">На доработке</option>
+              <option value="rejected">Отклонённые</option>
             </select>
           </div>
 
-          <div className="md:col-span-2">
+          <div className="md:col-span-3">
             <select
-              value={sortBy}
-              onChange={(e) =>
-                setSortBy(e.target.value as 'newest' | 'quality_desc' | 'quality_asc')
-              }
-              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              value={usageFilter}
+              onChange={(e) => setUsageFilter(e.target.value as 'all' | UsageStatus)}
+              className="w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-zinc-400 focus:outline-none"
             >
-              <option value="newest">Сначала новые</option>
-              <option value="quality_desc">Качество: выше</option>
-              <option value="quality_asc">Качество: ниже</option>
+              <option value="all">Любое использование</option>
+              <option value="unused">Не использован</option>
+              <option value="drafted">Есть черновик</option>
+              <option value="published">Опубликован</option>
+              <option value="archived">В архиве</option>
             </select>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-          {/* Segmented status filter */}
-          <div className="flex flex-wrap items-center gap-1 rounded-md bg-slate-100 p-1">
-            {(
-              [
-                ['ALL', `Все (${collectionStories.length})`],
-                [
-                  'approved',
-                  `Проверены (${collectionStories.filter((s) => s.verificationStatus === 'approved').length})`,
-                ],
-                [
-                  'pending',
-                  `Ожидают (${collectionStories.filter((s) => s.verificationStatus === 'pending').length})`,
-                ],
-                [
-                  'needs_revision',
-                  `На доработке (${collectionStories.filter((s) => s.verificationStatus === 'needs_revision').length})`,
-                ],
-                [
-                  'rejected',
-                  `Отклонены (${collectionStories.filter((s) => s.verificationStatus === 'rejected').length})`,
-                ],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setStatusFilter(key)}
-                className={`rounded px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap tabular-nums ${
-                  statusFilter === key
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-3 text-xs text-slate-600">
-            <label className="flex items-center gap-2">
-              <span>Мин. качество:</span>
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-zinc-600">
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="inline-flex items-center gap-2">
+              <span>Происхождение:</span>
               <select
-                value={minQuality}
-                onChange={(e) => setMinQuality(Number(e.target.value))}
-                className="rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs text-slate-900 tabular-nums"
+                value={originFilter}
+                onChange={(e) => setOriginFilter(e.target.value as 'all' | OriginType)}
+                className="rounded border border-stone-200 bg-white px-2 py-1 text-xs text-zinc-800"
               >
-                <option value={0}>Любое</option>
-                <option value={75}>75+</option>
-                <option value={85}>85+</option>
-                <option value={90}>90+</option>
+                <option value="all">Все</option>
+                <option value="original">Оригинальные (ИИ / ручные)</option>
+                <option value="external">Внешние источники</option>
               </select>
             </label>
-            <span className="font-mono tabular-nums text-slate-500">
-              Показано: {filtered.length}
-            </span>
-          </div>
-        </div>
-      </div>
 
-      {/* Story List */}
-      {filtered.length === 0 ? (
-        <div className="rounded-lg border border-slate-200 bg-white px-6 py-12 text-center">
-          <p className="text-sm font-medium text-slate-900">
-            По текущим фильтрам сюжеты не найдены
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Сбросьте параметры поиска или создайте новую партию сюжетов для этой категории.
-          </p>
-          <div className="mt-4 flex items-center justify-center gap-3">
+            <label className="inline-flex items-center gap-2">
+              <span>Мин. балл:</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={minScore}
+                onChange={(e) => setMinScore(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                className="w-16 rounded border border-stone-200 px-2 py-1 text-xs font-mono tabular-nums text-zinc-800"
+              />
+            </label>
+
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={onlyDuplicates}
+                onChange={(e) => setOnlyDuplicates(e.target.checked)}
+                className="rounded border-stone-300 text-rose-700 focus:ring-rose-600"
+              />
+              <span>Только с флагом совпадений</span>
+            </label>
+          </div>
+
+          {(search ||
+            categoryFilter !== 'all' ||
+            statusFilter !== 'all' ||
+            usageFilter !== 'all' ||
+            originFilter !== 'all' ||
+            minScore > 0 ||
+            onlyDuplicates) && (
             <button
               type="button"
               onClick={() => {
-                setSearchQuery('');
-                setCategoryFilter('ALL');
-                setStatusFilter('ALL');
-                setOriginFilter('ALL');
-                setMinQuality(0);
+                setSearch('');
+                setCategoryFilter('all');
+                setStatusFilter('all');
+                setUsageFilter('all');
+                setOriginFilter('all');
+                setMinScore(0);
+                setOnlyDuplicates(false);
               }}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="text-xs font-medium text-rose-800 hover:text-rose-900 cursor-pointer"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
               Сбросить фильтры
             </button>
-            <button
-              type="button"
-              onClick={onLaunchBatch}
-              className="inline-flex items-center gap-1.5 rounded-md bg-indigo-700 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-800"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Создать партию
-            </button>
-          </div>
+          )}
+        </div>
+      </div>
+
+      {/* Stories table / ledger */}
+      {filtered.length === 0 ? (
+        <div className="rounded-lg border border-stone-200 bg-white px-6 py-12 text-center">
+          <p className="text-sm font-medium text-zinc-800">Сюжеты по выбранным параметрам не найдены</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Сбросьте фильтры или добавьте новую сюжетную основу вручную или через партию.
+          </p>
         </div>
       ) : (
-        <div className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
-          {filtered.map((story) => (
-            <div
-              key={story.id}
-              className="group flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-slate-50/70 md:flex-row md:items-start md:justify-between"
-            >
-              <div className="min-w-0 flex-1">
-                {/* Zero-pill inline typographic metadata */}
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  <span className="font-mono font-medium text-slate-700">{story.id}</span>
-                  <span aria-hidden="true">·</span>
-                  <span className="font-medium text-slate-700">{story.category}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{story.plotMechanic}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>Партия #{story.batchNumber}</span>
-                  <span aria-hidden="true">·</span>
-                  <span className={`font-medium ${STATUS_TEXT_COLOR[story.verificationStatus]}`}>
-                    {STATUS_LABEL[story.verificationStatus]}
-                  </span>
-                  {story.duplicateFlag && (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span className="font-medium text-amber-700">
-                        Есть смысловое совпадение
-                      </span>
-                    </>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => onSelectStory(story)}
-                  className="mt-1 text-left text-base font-semibold text-slate-900 hover:text-indigo-700"
+        <div className="overflow-hidden rounded-lg border border-stone-200 bg-white">
+          <div className="divide-y divide-stone-200">
+            {filtered.map((story) => {
+              const score = story.quality?.overall ?? 0;
+              const isBusy = busyId === story.id;
+              return (
+                <div
+                  key={story.id}
+                  className="group px-5 py-4 transition-colors hover:bg-stone-50/80"
                 >
-                  {story.title}
-                </button>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      {/* Metadata strip - zero-pill plain typography */}
+                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-zinc-500">
+                        <span className="font-mono font-medium text-zinc-800 tabular-nums">
+                          {story.id}
+                        </span>
+                        <span>·</span>
+                        <span className="font-medium text-zinc-700">{story.category}</span>
+                        {story.subcategory && (
+                          <>
+                            <span>/</span>
+                            <span>{story.subcategory}</span>
+                          </>
+                        )}
+                        <span>·</span>
+                        <span className="font-mono tabular-nums">Партия #{story.batchNumber}</span>
+                        <span>·</span>
+                        <span
+                          className={
+                            story.verificationStatus === 'approved'
+                              ? 'font-medium text-teal-800'
+                              : story.verificationStatus === 'needs_revision'
+                                ? 'font-medium text-amber-800'
+                                : story.verificationStatus === 'rejected'
+                                  ? 'font-medium text-rose-800'
+                                  : 'font-medium text-zinc-700'
+                          }
+                        >
+                          {VERIFICATION_LABEL[story.verificationStatus]}
+                        </span>
+                        <span>·</span>
+                        <span>{USAGE_LABEL[story.usageStatus]}</span>
+                        {story.researchId && (
+                          <>
+                            <span>·</span>
+                            <span className="font-mono text-zinc-600">{story.researchId}</span>
+                          </>
+                        )}
+                        {story.duplicateFlag && (
+                          <>
+                            <span>·</span>
+                            <span className="font-medium text-rose-700">
+                              Возможный дубль ({story.similarityMatches[0]?.score ?? 0}%)
+                            </span>
+                          </>
+                        )}
+                      </div>
 
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                  {story.shortDescription}
-                </p>
+                      <button
+                        type="button"
+                        onClick={() => onOpenStory(story)}
+                        className="block text-left text-base font-semibold text-zinc-900 hover:text-rose-800 cursor-pointer"
+                      >
+                        {story.title}
+                      </button>
 
-                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                  <span>
-                    <strong className="font-medium text-slate-700">Участники:</strong>{' '}
-                    {story.participants}
-                  </span>
-                  <span>
-                    <strong className="font-medium text-slate-700">Вопрос:</strong>{' '}
-                    {story.mainTriggerQuestion}
-                  </span>
-                </div>
-              </div>
+                      <p className="text-sm leading-relaxed text-zinc-600 line-clamp-2">
+                        {story.shortDescription}
+                      </p>
 
-              {/* Right metrics + actions */}
-              <div className="flex items-center justify-between gap-4 md:flex-col md:items-end shrink-0">
-                <div className="text-right">
-                  <div className="font-mono text-base font-semibold text-slate-900 tabular-nums">
-                    {story.quality.overall}/100
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-0.5 text-xs text-zinc-500">
+                        <span>Механика: {story.plotMechanic || '—'}</span>
+                        <span>Вопрос: «{story.mainTriggerQuestion}»</span>
+                        {story.sourceUrl && (
+                          <span className="inline-flex items-center gap-1 text-zinc-600">
+                            <ExternalLink className="h-3 w-3" />
+                            Источник указан
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right side score & quick controls */}
+                    <div className="flex shrink-0 items-center justify-between gap-4 lg:flex-col lg:items-end">
+                      <div className="text-right">
+                        <div className="text-[11px] uppercase tracking-wider text-zinc-400">
+                          Качество
+                        </div>
+                        <div
+                          className={`font-mono text-lg font-semibold tabular-nums ${
+                            score >= 88
+                              ? 'text-teal-800'
+                              : score >= 75
+                                ? 'text-zinc-900'
+                                : 'text-amber-700'
+                          }`}
+                        >
+                          {score}/100
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onOpenStory(story)}
+                          className="rounded border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-stone-100 whitespace-nowrap cursor-pointer"
+                        >
+                          Паспорт
+                        </button>
+
+                        {story.verificationStatus !== 'approved' && (
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() =>
+                              handleQuickAction(story.id, { verificationStatus: 'approved' })
+                            }
+                            title="Подтвердить сюжет"
+                            className="inline-flex items-center gap-1 rounded border border-teal-200 bg-teal-50/70 px-2 py-1 text-xs font-medium text-teal-900 hover:bg-teal-100 disabled:opacity-50 whitespace-nowrap cursor-pointer"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            Одобрить
+                          </button>
+                        )}
+
+                        {story.verificationStatus !== 'needs_revision' && (
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() =>
+                              handleQuickAction(story.id, { verificationStatus: 'needs_revision' })
+                            }
+                            title="Отправить на доработку"
+                            className="rounded border border-stone-200 bg-white p-1.5 text-zinc-500 hover:text-amber-800 hover:border-amber-200 disabled:opacity-50 cursor-pointer"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+
+                        {confirmDeleteId === story.id ? (
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleDelete(story.id)}
+                              className="rounded bg-rose-700 px-2 py-1 text-xs font-medium text-white hover:bg-rose-800 cursor-pointer"
+                            >
+                              Удалить
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="rounded border border-stone-200 px-2 py-1 text-xs text-zinc-600 hover:bg-stone-100 cursor-pointer"
+                            >
+                              Отмена
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(story.id)}
+                            title="Удалить сюжет"
+                            className="rounded border border-stone-200 bg-white p-1.5 text-zinc-400 hover:text-rose-700 hover:border-rose-200 cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-slate-500">
-                    {story.originType === 'external' ? 'Внешний источник' : 'Оригинальный'}
-                  </div>
                 </div>
-
-                <div className="flex items-center gap-1.5">
-                  {story.verificationStatus !== 'approved' && (
-                    <button
-                      type="button"
-                      onClick={() => onQuickStatus(story.id, 'approved')}
-                      className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100 whitespace-nowrap"
-                    >
-                      <Check className="h-3 w-3" />
-                      Принять
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => onSelectStory(story)}
-                    className="rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 whitespace-nowrap"
-                  >
-                    Открыть паспорт
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

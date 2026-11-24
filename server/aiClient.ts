@@ -12,9 +12,6 @@ export const DEFAULT_GIGACHAT_API_URL = 'https://gigachat.devices.sberbank.ru/ap
 export const DEFAULT_GIGACHAT_SCOPE = 'GIGACHAT_API_PERS';
 export const DEFAULT_GIGACHAT_MODELS = ['GigaChat-2-Pro', 'GigaChat-2', 'GigaChat'] as const;
 
-export const DEFAULT_ZAI_ENDPOINT = 'https://api.z.ai/api/paas/v4/chat/completions';
-export const DEFAULT_ZAI_MODELS = ['glm-4.7-flash', 'glm-4.5-flash'] as const;
-
 export const DEFAULT_OPENAI_COMPAT_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 
 const PLACEHOLDER_TOKENS = new Set([
@@ -23,7 +20,6 @@ const PLACEHOLDER_TOKENS = new Set([
   'MY_GIGACHAT_AUTH_KEY',
   'MY_GIGACHAT_CLIENT_ID',
   'MY_GIGACHAT_CLIENT_SECRET',
-  'MY_ZAI_API_KEY',
   'MY_GROQ_API_KEY',
   'MY_AI_API_KEY',
   'MY_GITHUB_TOKEN',
@@ -95,28 +91,6 @@ export function resolveGigaChatCredentials(): {
   return { authKey, scope, oauthUrl, apiUrl, models };
 }
 
-export function resolveZaiCredentials(): {
-  apiKey: string;
-  endpoint: string;
-  models: string[];
-} {
-  const apiKey =
-    cleanEnvValue(process.env.ZAI_API_KEY) ||
-    cleanEnvValue(process.env.ZHIPU_API_KEY);
-  const endpoint =
-    cleanEnvValue(process.env.ZAI_API_ENDPOINT) ||
-    cleanEnvValue(process.env.ZAI_ENDPOINT) ||
-    DEFAULT_ZAI_ENDPOINT;
-  const customModel = cleanEnvValue(process.env.ZAI_MODEL);
-  const models = Array.from(
-    new Set([
-      ...(customModel ? [customModel] : []),
-      ...DEFAULT_ZAI_MODELS,
-    ])
-  );
-  return { apiKey, endpoint, models };
-}
-
 export function resolveOpenAiCompatBackup(): {
   apiKey: string;
   endpoint: string;
@@ -146,17 +120,11 @@ export function isGigaChatConfigured(): boolean {
   return Boolean(resolveGigaChatCredentials().authKey);
 }
 
-export function isZaiConfigured(): boolean {
-  return Boolean(resolveZaiCredentials().apiKey);
-}
-
 export function resolveAiApiToken(): string {
   const gemini = resolveGeminiApiKey();
   if (gemini) return gemini;
   const giga = resolveGigaChatCredentials();
   if (giga.authKey) return giga.authKey;
-  const zai = resolveZaiCredentials();
-  if (zai.apiKey) return zai.apiKey;
   return resolveOpenAiCompatBackup().apiKey;
 }
 
@@ -167,9 +135,6 @@ export function resolveAiModel(): string {
   if (isGigaChatConfigured()) {
     return resolveGigaChatCredentials().models[0] || DEFAULT_GIGACHAT_MODELS[0];
   }
-  if (isZaiConfigured()) {
-    return resolveZaiCredentials().models[0] || DEFAULT_ZAI_MODELS[0];
-  }
   return cleanEnvValue(process.env.GEMINI_MODEL) || DEFAULT_GEMINI_MODEL;
 }
 
@@ -179,7 +144,6 @@ export function isAiConfigured(): boolean {
   return Boolean(
     isGeminiPrimaryConfigured() ||
       isGigaChatConfigured() ||
-      isZaiConfigured() ||
       resolveOpenAiCompatBackup().apiKey
   );
 }
@@ -272,7 +236,7 @@ export function formatAiError(err: unknown): AiApiError {
     lower.includes('payment required')
   ) {
     return new AiApiError(
-      'Превышен лимит запросов AI (429 RESOURCE_EXHAUSTED). Повторите чуть позже или подключите резервный GigaChat (GIGACHAT_AUTH_KEY) / Z.ai (ZAI_API_KEY).',
+      'Превышен лимит запросов AI (429 RESOURCE_EXHAUSTED). Повторите чуть позже или подключите резервный GigaChat API (GIGACHAT_AUTH_KEY).',
       429,
       'RESOURCE_EXHAUSTED'
     );
@@ -288,7 +252,7 @@ export function formatAiError(err: unknown): AiApiError {
     lower.includes('credentials')
   ) {
     return new AiApiError(
-      'Доступ к AI API отклонён (401/403). Проверьте GEMINI_API_KEY, GIGACHAT_AUTH_KEY или ZAI_API_KEY в Secrets.',
+      'Доступ к AI API отклонён (401/403). Проверьте GEMINI_API_KEY или резервный GIGACHAT_AUTH_KEY (и GIGACHAT_SCOPE) в Secrets.',
       403,
       'PERMISSION_DENIED'
     );
@@ -300,7 +264,7 @@ export function formatAiError(err: unknown): AiApiError {
     lower.includes('502')
   ) {
     return new AiApiError(
-      'Серверы AI временно перегружены (502/503 UNAVAILABLE), резервные модели тоже не ответили. Повторите запрос чуть позже или проверьте GIGACHAT_AUTH_KEY / ZAI_API_KEY.',
+      'Сервер Gemini временно перегружен (502/503 UNAVAILABLE), резервные модели тоже не ответили. Повторите запрос чуть позже или проверьте GIGACHAT_AUTH_KEY.',
       503,
       'UNAVAILABLE'
     );
@@ -320,7 +284,7 @@ export function formatAiError(err: unknown): AiApiError {
   }
   if (lower.includes('404') || lower.includes('not_found')) {
     return new AiApiError(
-      'Выбранная AI-модель не найдена (404). Проверьте настройки GEMINI_MODEL, GIGACHAT_MODEL или ZAI_MODEL.',
+      'Выбранная AI-модель не найдена (404). Проверьте настройки GEMINI_MODEL или GIGACHAT_MODEL.',
       404,
       'NOT_FOUND'
     );
@@ -848,12 +812,11 @@ export async function callChatCompletionJson<T>(params: {
 }): Promise<T> {
   const geminiKey = resolveGeminiApiKey();
   const gigaCreds = resolveGigaChatCredentials();
-  const zaiCreds = resolveZaiCredentials();
   const backup = resolveOpenAiCompatBackup();
 
-  if (!geminiKey && !gigaCreds.authKey && !zaiCreds.apiKey && !backup.apiKey) {
+  if (!geminiKey && !gigaCreds.authKey && !backup.apiKey) {
     throw new AiApiError(
-      'AI-ключи пока не настроены (добавьте GEMINI_API_KEY, резервный GigaChat: GIGACHAT_AUTH_KEY или Z.ai: ZAI_API_KEY). Остальные разделы работают без ключей.',
+      'AI-ключи пока не настроены (добавьте GEMINI_API_KEY и/или резервный GigaChat: GIGACHAT_AUTH_KEY). Остальные разделы работают без ключей.',
       400,
       'API_KEY_MISSING'
     );
@@ -923,32 +886,7 @@ export async function callChatCompletionJson<T>(params: {
     }
   }
 
-  // Tier 3: Z.ai API (Zhipu AI) additional free fallback cascade: glm-4.7-flash -> glm-4.5-flash
-  if (zaiCreds.apiKey) {
-    for (const model of zaiCreds.models) {
-      try {
-        return await callOpenAiCompatibleEndpoint<T>({
-          endpoint: zaiCreds.endpoint,
-          apiKey: zaiCreds.apiKey,
-          model,
-          systemInstruction: params.systemInstruction,
-          userPrompt: params.userPrompt,
-          temperature: params.temperature,
-          maxTokens: params.maxTokens,
-          timeoutMs,
-          signal: params.signal,
-          expectArray: params.expectArray,
-        });
-      } catch (err) {
-        if (err instanceof AiApiError && err.code === 'ABORTED') {
-          throw err;
-        }
-        lastError = err;
-      }
-    }
-  }
-
-  // Tier 4: Optional custom OpenAI-compatible backup if explicitly configured
+  // Tier 3: Optional OpenAI-compatible backup if explicitly configured
   if (backup.apiKey) {
     try {
       return await callOpenAiCompatibleEndpoint<T>({

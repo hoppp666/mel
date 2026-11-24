@@ -1,258 +1,279 @@
-import type {
+import {
   CollectionType,
-  QualityMetrics,
-  ResearchDuplicateMatch,
-  ResearchQualityBreakdown,
+  ResearchQualityScore,
   ResearchResult,
   SimilarityMatch,
   StoryPlot,
-} from './types.ts';
+  StoryQuality,
+  StoryQualityBreakdown,
+} from './types.js';
 
 const STOP_WORDS = new Set([
-  'и', 'в', 'во', 'не', 'что', 'он', 'на', 'я', 'с', 'со', 'как', 'а', 'то', 'все', 'она',
-  'так', 'его', 'но', 'да', 'ты', 'к', 'у', 'же', 'вы', 'за', 'бы', 'по', 'только', 'ее',
-  'мне', 'было', 'вот', 'от', 'меня', 'еще', 'нет', 'о', 'из', 'ему', 'теперь', 'когда',
-  'даже', 'ну', 'вдруг', 'ли', 'если', 'уже', 'или', 'ни', 'быть', 'был', 'него', 'до',
-  'вас', 'нибудь', 'опять', 'уж', 'вам', 'ведь', 'там', 'потом', 'себя', 'ничего', 'ей',
-  'может', 'они', 'тут', 'где', 'есть', 'надо', 'ней', 'для', 'мы', 'тебя', 'их', 'чем',
-  'была', 'сам', 'чтоб', 'без', 'будто', 'чего', 'раз', 'тоже', 'себе', 'под', 'будет',
-  'ж', 'тогда', 'кто', 'этот', 'того', 'потому', 'этого', 'какой', 'совсем', 'ним', 'здесь',
-  'этом', 'один', 'почти', 'мой', 'тем', 'чтобы', 'нее', 'сейчас', 'были', 'куда', 'зачем',
-  'всех', 'никогда', 'можно', 'при', 'наконец', 'два', 'об', 'другой', 'хоть', 'после',
-  'над', 'больше', 'тот', 'через', 'эти', 'нас', 'про', 'всего', 'них', 'какая', 'много',
-  'разве', 'три', 'эту', 'моя', 'впрочем', 'хорошо', 'свою', 'этой', 'перед', 'иногда',
-  'лучше', 'чуть', 'том', 'нельзя', 'такой', 'им', 'более', 'всегда', 'конечно', 'всю',
-  'между', 'это', 'однажды', 'который', 'которая', 'которые', 'свой', 'своей', 'своего',
-  'очень', 'каждый', 'каждая', 'пара', 'парень', 'девушка', 'муж', 'жена', 'мужчина', 'женщина',
-  'партнер', 'партнёр', 'отношения', 'отношениях', 'история', 'сюжет', 'человек', 'люди',
-  'против', 'прав', 'своих', 'личные', 'личная', 'личное', 'личный', 'разделение',
-  'аудитории', 'равных', 'лагеря', 'сторон', 'стороны', 'механизм', 'конфликт',
-  'ситуация', 'столкновение', 'жизни', 'жизнь', 'семье', 'семья', 'семейный', 'дома', 'дом',
-  'the', 'and', 'for', 'that', 'this', 'with', 'from', 'but', 'has', 'have', 'had', 'was',
-  'were', 'are', 'been', 'being', 'his', 'her', 'hers', 'she', 'him', 'they', 'them', 'their',
-  'you', 'your', 'yours', 'our', 'ours', 'about', 'into', 'over', 'after', 'before', 'when',
-  'what', 'who', 'whom', 'which', 'where', 'why', 'how', 'not', 'more', 'most', 'also', 'only',
-  'just', 'very', 'much', 'many', 'some', 'such', 'other', 'than', 'then', 'there', 'here',
-  'all', 'any', 'both', 'each', 'few', 'own', 'same', 'one', 'two', 'three', 'year', 'years',
-  'week', 'day', 'days', 'time', 'say', 'says', 'said', 'like', 'know', 'want', 'make', 'made',
-  'get', 'got', 'can', 'could', 'would', 'should', 'will', 'may', 'might', 'via', 'out',
-  'off', 'too', 'even', 'way', 'still', 'part', 'new', 'old', 'well', 'now', 'ever', 'never',
-  'really', 'actually', 'someone', 'something', 'things', 'thing', 'people', 'person',
-  'couple', 'couples', 'relationship', 'relationships', 'partner', 'partners', 'husband', 'wife',
-  'photo', 'photos', 'illustration', 'getty', 'images', 'cut', 'article', 'story', 'columnist',
+  // Russian stop words & generic relation nouns
+  'и', 'в', 'во', 'не', 'что', 'он', 'на', 'я', 'с', 'со', 'как', 'а', 'то', 'все',
+  'она', 'так', 'его', 'но', 'да', 'ты', 'к', 'у', 'же', 'вы', 'за', 'бы', 'по',
+  'только', 'ее', 'её', 'мне', 'было', 'вот', 'от', 'меня', 'еще', 'ещё', 'нет',
+  'о', 'из', 'ему', 'теперь', 'когда', 'даже', 'ну', 'вдруг', 'ли', 'если', 'уже',
+  'или', 'ни', 'быть', 'был', 'него', 'до', 'вас', 'нибудь', 'опять', 'уж', 'вам',
+  'ведь', 'там', 'потом', 'себя', 'ничего', 'ей', 'может', 'они', 'тут', 'где',
+  'есть', 'надо', 'ней', 'для', 'мы', 'тебя', 'их', 'чем', 'была', 'сам', 'чтоб',
+  'без', 'будто', 'чего', 'раз', 'тоже', 'себе', 'под', 'будет', 'ж', 'тогда',
+  'кто', 'этот', 'того', 'потому', 'этого', 'какой', 'совсем', 'ним', 'здесь',
+  'этом', 'один', 'почти', 'мой', 'тем', 'чтобы', 'нее', 'неё', 'сейчас', 'были',
+  'куда', 'зачем', 'всех', 'никогда', 'можно', 'при', 'наконец', 'два', 'об',
+  'другой', 'хоть', 'после', 'над', 'больше', 'тот', 'через', 'эти', 'нас', 'про',
+  'всего', 'них', 'какая', 'много', 'разве', 'три', 'эту', 'моя', 'впрочем',
+  'хорошо', 'свою', 'этой', 'перед', 'иногда', 'лучше', 'чуть', 'том', 'нельзя',
+  'такой', 'им', 'более', 'всегда', 'конечно', 'всю', 'между', 'очень', 'просто',
+  'история', 'сюжет', 'ситуация', 'отношения', 'отношение', 'партнер', 'партнёр',
+  'человек', 'пара', 'мужчина', 'женщина', 'парень', 'девушка', 'муж', 'жена',
+  // English stop words for bilingual research matching
+  'the', 'and', 'for', 'that', 'with', 'this', 'from', 'have', 'was', 'were',
+  'are', 'but', 'not', 'you', 'your', 'they', 'their', 'she', 'her', 'his',
+  'him', 'about', 'what', 'when', 'where', 'which', 'who', 'why', 'how',
+  'into', 'over', 'after', 'before', 'between', 'just', 'like', 'more',
+  'some', 'could', 'would', 'should', 'been', 'being', 'than', 'then',
+  'also', 'very', 'much', 'even', 'such', 'only', 'other', 'each', 'make',
+  'made', 'does', 'did', 'has', 'had', 'will', 'can', 'one', 'two',
+  'relationship', 'relationships', 'partner', 'partners', 'couple', 'couples',
+  'story', 'stories', 'article', 'people', 'someone', 'thing', 'things',
 ]);
 
-// Lightweight Russian suffix stemmer for robust lexical + semantic overlap detection
 export function stemRussianWord(word: string): string {
-  const clean = word.toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
-  if (clean.length <= 3) return clean;
-  return clean.replace(
-    /(иями|ями|ами|остью|ости|ение|ание|ство|ств|овать|евать|иться|ться|ого|его|ому|ему|ыми|ими|ая|яя|ое|ее|ые|ие|ый|ий|ой|ам|ям|ом|ем|ах|ях|ов|ев|ей|ии|ия|ью|ую|юю|ть|ти|ет|ут|ют|ит|ат|ят|ал|ял|ил|ла|ло|ли|ка|ку|ки|ке|ой|ом|ым|им|а|я|о|е|у|ю|ы|и)$/i,
-    ''
-  ) || clean.slice(0, 4);
+  let w = word.toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
+  if (w.length <= 3) return w;
+
+  if (/[a-z]/.test(w)) {
+    const enEndings = ['ingly', 'edly', 'ing', 'ies', 'ied', 'tion', 'ment', 'ness', 'able', 'ible', 'ed', 'ly', 'es', 's'];
+    for (const end of enEndings) {
+      if (w.length - end.length >= 4 && w.endsWith(end)) {
+        return w.slice(0, -end.length);
+      }
+    }
+    return w;
+  }
+
+  const ruEndings = [
+    'иями', 'ями', 'ами', 'ость', 'ение', 'ание', 'ился', 'алась', 'ились',
+    'ться', 'ется', 'ются', 'ится', 'ать', 'ять', 'ить', 'еть', 'ого', 'его',
+    'ому', 'ему', 'ими', 'ыми', 'ая', 'яя', 'ое', 'ее', 'ие', 'ые', 'ой',
+    'ей', 'ий', 'ый', 'ом', 'ем', 'ам', 'ям', 'ах', 'ях', 'ов', 'ев',
+    'ия', 'ья', 'ию', 'ью', 'ии', 'а', 'я', 'о', 'е', 'и', 'ы', 'у', 'ю', 'ь',
+  ];
+  for (const end of ruEndings) {
+    if (w.length - end.length >= 3 && w.endsWith(end)) {
+      return w.slice(0, -end.length);
+    }
+  }
+  return w;
 }
 
-export function tokenizeNormalized(text: string): string[] {
+export function tokenizeText(text: string): string[] {
   if (!text) return [];
-  return text
+  const raw = text
     .toLowerCase()
     .replace(/ё/g, 'е')
     .split(/[^a-zа-я0-9]+/i)
-    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w))
-    .map(stemRussianWord)
-    .filter((w) => w.length >= 3);
+    .filter((t) => t.length >= 3 && !STOP_WORDS.has(t));
+
+  return raw.map(stemRussianWord).filter((t) => t.length >= 3);
 }
 
-export function buildSemanticFingerprint(plot: Partial<StoryPlot>): string {
+export function buildBigrams(tokens: string[]): Set<string> {
+  const result = new Set<string>();
+  for (let i = 0; i < tokens.length - 1; i++) {
+    result.add(`${tokens[i]}_${tokens[i + 1]}`);
+  }
+  return result;
+}
+
+export function buildSemanticFingerprint(story: Partial<StoryPlot>): string {
   const parts = [
-    plot.mainTheme || plot.category || '',
-    plot.coreConflictOrAction || '',
-    (plot.keywords || []).slice(0, 5).join(' '),
+    story.mainTheme,
+    story.plotMechanic,
+    story.coreConflictOrAction,
+    story.hiddenExpectation,
+    story.unexpectedNuance,
+    story.emotionalMechanism,
+    ...(story.keywords || []),
   ]
-    .map((s) => s.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .join(' ');
 
-  const tokens = Array.from(new Set(tokenizeNormalized(parts.join(' ')))).slice(0, 12);
-  return `${plot.collection === 'debate' ? 'D' : 'R'}:${(plot.category || 'general').toLowerCase()}::${tokens.join('|')}`;
+  const tokens = Array.from(new Set(tokenizeText(parts)));
+  return tokens.slice(0, 24).join('|');
 }
 
-function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+function jaccardSet(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
-  let intersection = 0;
+  let inter = 0;
   for (const item of a) {
-    if (b.has(item)) intersection++;
+    if (b.has(item)) inter++;
   }
-  const union = a.size + b.size - intersection;
-  return union === 0 ? 0 : intersection / union;
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
 }
 
-function overlapSimilarity(a: Set<string>, b: Set<string>): number {
+function overlapSet(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
-  let intersection = 0;
+  let inter = 0;
   for (const item of a) {
-    if (b.has(item)) intersection++;
+    if (b.has(item)) inter++;
   }
-  return intersection / Math.min(a.size, b.size);
+  return inter / Math.min(a.size, b.size);
 }
 
-function extractStoryFeatureSets(story: Partial<StoryPlot>) {
-  const coreText = [
-    story.title || '',
-    story.shortDescription || '',
-    story.coreConflictOrAction || '',
-    story.mainTheme || '',
-  ].join(' ');
+export function normalizeSourceUrl(url: string): string {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url.trim());
+    return `${parsed.hostname.replace(/^www\./, '').toLowerCase()}${parsed.pathname.replace(/\/+$/, '').toLowerCase()}`;
+  } catch {
+    return url.trim().toLowerCase().replace(/\/+$/, '');
+  }
+}
 
-  const fullText = [
-    coreText,
-    story.fullPlot || '',
-    story.hiddenExpectation || '',
-    story.unexpectedNuance || '',
-  ].join(' ');
-
-  const fpBody = (story.semanticFingerprint || '').includes('::')
-    ? (story.semanticFingerprint || '').split('::').slice(1).join(' ')
-    : story.semanticFingerprint || '';
-
-  const fpTokens = new Set([
-    ...tokenizeNormalized(fpBody),
-    ...tokenizeNormalized((story.keywords || []).join(' ')),
-    ...tokenizeNormalized(story.mainTheme || ''),
-  ]);
-
-  const coreTokens = new Set(tokenizeNormalized(coreText));
-  const fullTokens = new Set(tokenizeNormalized(fullText));
-
-  // Create semantic bigrams from core conflict + title to catch structural plot clones
-  const orderedCore = tokenizeNormalized(coreText);
-  const bigrams = new Set<string>();
-  for (let i = 0; i < orderedCore.length - 1; i++) {
-    bigrams.add(`${orderedCore[i]}_${orderedCore[i + 1]}`);
+export function computePairSimilarity(
+  candidate: Partial<StoryPlot>,
+  existing: StoryPlot
+): { score: number; reason: string } {
+  if (candidate.sourceUrl && existing.sourceUrl) {
+    const u1 = normalizeSourceUrl(candidate.sourceUrl);
+    const u2 = normalizeSourceUrl(existing.sourceUrl);
+    if (u1 && u2 && u1 === u2) {
+      return { score: 99, reason: 'Совпадает нормализованный URL внешнего источника' };
+    }
   }
 
-  return { fpTokens, coreTokens, fullTokens, bigrams };
+  const candFp = new Set(
+    (candidate.semanticFingerprint || buildSemanticFingerprint(candidate))
+      .split('|')
+      .filter((t) => t.length >= 3)
+  );
+  const existFp = new Set(
+    (existing.semanticFingerprint || buildSemanticFingerprint(existing))
+      .split('|')
+      .filter((t) => t.length >= 3)
+  );
+  const fpSim = jaccardSet(candFp, existFp);
+
+  const candCoreTokens = tokenizeText(
+    `${candidate.title || ''} ${candidate.coreConflictOrAction || ''} ${candidate.mainTheme || ''}`
+  );
+  const existCoreTokens = tokenizeText(
+    `${existing.title || ''} ${existing.coreConflictOrAction || ''} ${existing.mainTheme || ''}`
+  );
+  const coreJaccard = jaccardSet(new Set(candCoreTokens), new Set(existCoreTokens));
+  const coreOverlap = overlapSet(new Set(candCoreTokens), new Set(existCoreTokens));
+  const coreSim = coreJaccard * 0.55 + coreOverlap * 0.45;
+
+  const candFullTokens = tokenizeText(
+    `${candidate.shortDescription || ''} ${candidate.fullPlot || ''} ${candidate.hiddenExpectation || ''} ${candidate.unexpectedNuance || ''}`
+  );
+  const existFullTokens = tokenizeText(
+    `${existing.shortDescription || ''} ${existing.fullPlot || ''} ${existing.hiddenExpectation || ''} ${existing.unexpectedNuance || ''}`
+  );
+  const fullSim =
+    jaccardSet(new Set(candFullTokens), new Set(existFullTokens)) * 0.65 +
+    overlapSet(new Set(candFullTokens), new Set(existFullTokens)) * 0.35;
+
+  const candBigrams = buildBigrams(candCoreTokens);
+  const existBigrams = buildBigrams(existCoreTokens);
+  const bigramSim = jaccardSet(candBigrams, existBigrams);
+
+  let raw = fpSim * 0.32 + coreSim * 0.34 + fullSim * 0.24 + bigramSim * 0.1;
+
+  if (candidate.category && existing.category && candidate.category === existing.category) {
+    raw += 0.04;
+  }
+  if (candidate.plotMechanic && existing.plotMechanic && candidate.plotMechanic === existing.plotMechanic) {
+    raw += 0.03;
+  }
+
+  const score = Math.min(99, Math.round(raw * 100));
+
+  const reasons: string[] = [];
+  if (coreSim >= 0.32) reasons.push('близкое ядро конфликта/действия');
+  if (fpSim >= 0.28) reasons.push('пересечение семантических маркеров темы');
+  if (fullSim >= 0.3) reasons.push('схожие обстоятельства и скрытый мотив');
+  if (bigramSim >= 0.15) reasons.push('совпадающие ключевые словосочетания');
+  if (candidate.category === existing.category && candidate.plotMechanic === existing.plotMechanic) {
+    reasons.push('совпадают категория и сюжетная механика');
+  }
+
+  return {
+    score,
+    reason: reasons.length > 0 ? reasons.join(', ') : 'общая тематическая близость формулировок',
+  };
 }
 
 export function findSimilarStories(
   candidate: Partial<StoryPlot>,
-  existingStories: StoryPlot[],
-  thresholdPercent = 38
+  stories: StoryPlot[],
+  thresholdPercent = 38,
+  excludeId?: string
 ): SimilarityMatch[] {
-  const cand = extractStoryFeatureSets(candidate);
   const matches: SimilarityMatch[] = [];
-
-  for (const existing of existingStories) {
-    if (candidate.id && existing.id === candidate.id) continue;
-
-    const ex = extractStoryFeatureSets(existing);
-
-    const fpSim = jaccardSimilarity(cand.fpTokens, ex.fpTokens);
-    const coreJaccard = jaccardSimilarity(cand.coreTokens, ex.coreTokens);
-    const coreOverlap = overlapSimilarity(cand.coreTokens, ex.coreTokens);
-    const coreSim = coreJaccard * 0.6 + coreOverlap * 0.4;
-
-    const fullJaccard = jaccardSimilarity(cand.fullTokens, ex.fullTokens);
-    const fullOverlap = overlapSimilarity(cand.fullTokens, ex.fullTokens);
-    const fullSim = fullJaccard * 0.65 + fullOverlap * 0.35;
-
-    const bigramSim = jaccardSimilarity(cand.bigrams, ex.bigrams);
-
-    const sameCollectionBonus = candidate.collection === existing.collection ? 0.02 : 0;
-    const sameCategoryBonus =
-      candidate.category && existing.category && candidate.category === existing.category ? 0.05 : 0;
-    const sameMechanicBonus =
-      candidate.plotMechanic && existing.plotMechanic && candidate.plotMechanic === existing.plotMechanic
-        ? 0.04
-        : 0;
-
-    // Re-weight when candidate is a quick draft without explicit semanticFingerprint/keywords
-    const hasFp = cand.fpTokens.size > 0;
-    const rawScore = hasFp
-      ? fpSim * 0.26 +
-        coreSim * 0.36 +
-        fullSim * 0.24 +
-        bigramSim * 0.14 +
-        sameCollectionBonus +
-        sameCategoryBonus +
-        sameMechanicBonus
-      : coreSim * 0.50 +
-        fullSim * 0.34 +
-        bigramSim * 0.16 +
-        sameCollectionBonus +
-        sameCategoryBonus +
-        sameMechanicBonus;
-
-    // Scale to 0..100 realistically
-    const similarityScore = Math.min(99, Math.round(rawScore * 145));
-
-    if (similarityScore >= thresholdPercent) {
-      const sharedTokens: string[] = [];
-      for (const t of cand.coreTokens) {
-        if (ex.coreTokens.has(t)) sharedTokens.push(t);
-      }
-      for (const t of cand.fpTokens) {
-        if (ex.fpTokens.has(t) && !sharedTokens.includes(t)) sharedTokens.push(t);
-      }
-
-      const reasons: string[] = [];
-      if (candidate.category === existing.category) {
-        reasons.push(`совпадает категория «${existing.category}»`);
-      }
-      if (candidate.plotMechanic && candidate.plotMechanic === existing.plotMechanic) {
-        reasons.push(`одинаковая сюжетная механика («${existing.plotMechanic}»)`);
-      }
-      if (coreSim >= 0.22) {
-        reasons.push('близкая формулировка основного конфликта/действия');
-      }
-      if (fpSim >= 0.25) {
-        reasons.push('пересечение семантического отпечатка и ключевых тем');
-      }
-      if (reasons.length === 0) {
-        reasons.push('высокое лексико-тематическое пересечение сюжетной основы');
-      }
-
+  for (const s of stories) {
+    if (excludeId && s.id === excludeId) continue;
+    if (s.verificationStatus === 'rejected') continue;
+    const { score, reason } = computePairSimilarity(candidate, s);
+    if (score >= thresholdPercent) {
       matches.push({
-        matchedId: existing.id,
-        matchedTitle: existing.title,
-        matchedShortDescription: existing.shortDescription,
-        matchedCollection: existing.collection,
-        matchedCategory: existing.category,
-        similarityScore,
-        sharedKeywords: sharedTokens.slice(0, 6),
-        reason: `Сходство ${similarityScore}%: ${reasons.join(', ')}.`,
+        storyId: s.id,
+        title: s.title,
+        collection: s.collection,
+        score,
+        reason,
       });
     }
   }
-
-  return matches.sort((a, b) => b.similarityScore - a.similarityScore).slice(0, 5);
+  return matches.sort((a, b) => b.score - a.score).slice(0, 5);
 }
 
-export function calculateOverallQuality(q: Partial<QualityMetrics>, collection: 'debate' | 'romantic'): number {
-  const baseValues = [
-    q.originality ?? 75,
-    q.realism ?? 75,
-    q.emotionalExpressiveness ?? 75,
-    q.interest ?? 75,
-    q.discussionPotential ?? 75,
-    q.specificity ?? 75,
-    q.plotVariability ?? 75,
-  ];
-  const specificValues =
-    collection === 'debate'
-      ? [
-          q.ambiguity ?? 75,
-          q.bothSidesArgumentation ?? 75,
-          q.contradictionStrength ?? 75,
-        ]
-      : [
-          q.emotionalWarmth ?? 75,
-          q.relatability ?? 75,
-          q.smallDetailPower ?? 75,
-          q.naturalness ?? 75,
-        ];
+export function calculateQualityScore(
+  collection: CollectionType,
+  partial?: Partial<StoryQualityBreakdown>,
+  editorialNote?: string
+): StoryQuality {
+  const clamp = (v: number | undefined, fallback = 85) =>
+    Math.max(0, Math.min(100, Math.round(typeof v === 'number' && !Number.isNaN(v) ? v : fallback)));
 
-  const all = [...baseValues, ...specificValues];
-  return Math.round(all.reduce((acc, v) => acc + v, 0) / all.length);
+  const base: StoryQualityBreakdown = {
+    originality: clamp(partial?.originality, 88),
+    realism: clamp(partial?.realism, 91),
+    emotionalDepth: clamp(partial?.emotionalDepth, 89),
+    engagement: clamp(partial?.engagement, 90),
+    discussionPotential: clamp(partial?.discussionPotential, collection === 'debate' ? 92 : 84),
+    specificity: clamp(partial?.specificity, 90),
+    variability: clamp(partial?.variability, 87),
+  };
+
+  if (collection === 'debate') {
+    base.ambiguity = clamp(partial?.ambiguity, 91);
+    base.bothSidesStrength = clamp(partial?.bothSidesStrength, 90);
+    base.contradictionPower = clamp(partial?.contradictionPower, 89);
+  } else {
+    base.warmth = clamp(partial?.warmth, 92);
+    base.relatability = clamp(partial?.relatability, 91);
+    base.smallDetailPower = clamp(partial?.smallDetailPower, 90);
+    base.naturalness = clamp(partial?.naturalness, 90);
+  }
+
+  const vals = Object.values(base).filter((n): n is number => typeof n === 'number');
+  const overall = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+
+  return {
+    overall,
+    breakdown: base,
+    editorialNote:
+      editorialNote ||
+      (overall >= 88
+        ? 'Сильная жизненная конкретика с яркой деталью и естественной мотивацией участников.'
+        : overall >= 75
+          ? 'Рабочая сюжетная основа; при подготовке публикации стоит усилить деталь и финал.'
+          : 'Слабая конкретика или избитый конфликт — требуется переработка.'),
+  };
 }
 
 export function storiesToCsv(stories: StoryPlot[]): string {
@@ -262,42 +283,36 @@ export function storiesToCsv(stories: StoryPlot[]): string {
     'category',
     'subcategory',
     'title',
-    'short_description',
-    'full_plot',
+    'shortDescription',
+    'fullPlot',
     'participants',
     'setting',
-    'core_conflict_or_action',
-    'side_a_position',
-    'side_b_position',
-    'emotional_mechanism',
-    'hidden_expectation',
-    'unexpected_nuance',
-    'possible_twist',
-    'main_trigger_question',
-    'additional_questions',
+    'coreConflictOrAction',
+    'sideAPosition',
+    'sideBPosition',
+    'emotionalMechanism',
+    'hiddenExpectation',
+    'unexpectedNuance',
+    'possibleTwist',
+    'mainTriggerQuestion',
+    'additionalQuestions',
     'keywords',
-    'idea_source',
-    'source_url',
-    'origin_type',
-    'created_at',
-    'verification_status',
-    'usage_status',
-    'semantic_fingerprint',
-    'main_theme',
-    'plot_mechanic',
-    'unique_details',
-    'source_analysis_note',
-    'batch_number',
-    'quality_overall',
-    'quality_note',
+    'ideaSource',
+    'sourceUrl',
+    'originType',
+    'createdAt',
+    'verificationStatus',
+    'usageStatus',
+    'semanticFingerprint',
+    'mainTheme',
+    'plotMechanic',
+    'qualityOverall',
+    'researchId',
   ];
 
-  const escapeCell = (val: unknown): string => {
-    const str = String(val ?? '').replace(/\r?\n/g, ' ');
-    if (/[",;\n]/.test(str)) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
+  const escape = (val: unknown): string => {
+    const str = Array.isArray(val) ? val.join(' | ') : String(val ?? '');
+    return `"${str.replace(/"/g, '""')}"`;
   };
 
   const rows = stories.map((s) =>
@@ -319,8 +334,8 @@ export function storiesToCsv(stories: StoryPlot[]): string {
       s.unexpectedNuance,
       s.possibleTwist,
       s.mainTriggerQuestion,
-      s.additionalQuestions.join(' | '),
-      s.keywords.join(', '),
+      s.additionalQuestions,
+      s.keywords,
       s.ideaSource,
       s.sourceUrl,
       s.originType,
@@ -330,21 +345,17 @@ export function storiesToCsv(stories: StoryPlot[]): string {
       s.semanticFingerprint,
       s.mainTheme,
       s.plotMechanic,
-      s.uniqueDetails,
-      s.sourceAnalysisNote || '',
-      s.batchNumber,
-      s.quality.overall,
-      s.quality.editorialNote,
+      s.quality?.overall ?? 0,
+      s.researchId ?? '',
     ]
-      .map(escapeCell)
+      .map(escape)
       .join(',')
   );
 
-  // UTF-8 BOM for seamless Excel / Supabase CSV import
-  return '\uFEFF' + [headers.join(','), ...rows].join('\n');
+  return '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
 }
 
-export const SUPABASE_SQL_SCHEMA = `-- MELO_LOVE Story Database — Supabase PostgreSQL Schema
+export const SUPABASE_SQL_SCHEMA = `-- Схема для миграции базы сюжетов MELO_LOVE в Supabase (PostgreSQL)
 create table if not exists public.melo_story_plots (
   id text primary key,
   collection text not null check (collection in ('debate', 'romantic')),
@@ -372,235 +383,190 @@ create table if not exists public.melo_story_plots (
   verification_status text not null check (verification_status in ('pending', 'approved', 'needs_revision', 'rejected')),
   usage_status text not null check (usage_status in ('unused', 'drafted', 'published', 'archived')),
   semantic_fingerprint text not null,
-  main_theme text not null,
-  plot_mechanic text not null,
-  unique_details text not null,
-  source_analysis_note text,
+  main_theme text not null default '',
+  plot_mechanic text not null default '',
+  unique_details text not null default '',
+  source_analysis_note text not null default '',
+  research_id text,
+  research_notes text,
   batch_number integer not null default 1,
-  quality_metrics jsonb not null,
-  updated_at timestamptz not null default now()
+  quality_overall integer not null default 85,
+  quality_payload jsonb not null default '{}'::jsonb,
+  duplicate_flag boolean not null default false
 );
 
-create index if not exists idx_melo_collection_cat on public.melo_story_plots (collection, category);
-create index if not exists idx_melo_verification on public.melo_story_plots (verification_status);
-create index if not exists idx_melo_fingerprint on public.melo_story_plots (semantic_fingerprint);
+create index if not exists idx_melo_collection_status
+  on public.melo_story_plots (collection, verification_status, usage_status);
+create index if not exists idx_melo_fingerprint
+  on public.melo_story_plots (semantic_fingerprint);
 `;
 
-export function getResearchQualityTier(score: number): string {
-  if (score >= 90) return 'Отличная идея';
-  if (score >= 85) return 'Хорошая идея';
-  if (score >= 75) return 'Требует проверки';
+// ============================================================================
+// ЭТАП 2: ОЦЕНКА И ТРЁХКОНТУРНАЯ ДЕДУПЛИКАЦИЯ ИССЛЕДОВАНИЙ
+// ============================================================================
+
+export function getResearchQualityTier(
+  overall: number
+): ResearchQualityScore['tierLabel'] {
+  if (overall >= 90) return 'Отличная идея';
+  if (overall >= 85) return 'Хорошая идея';
+  if (overall >= 75) return 'Требует проверки';
   return 'Рекомендуется доработка или отклонение';
 }
 
 export function calculateResearchQuality(
-  q: Partial<ResearchQualityBreakdown>,
-  collection: CollectionType
-): { overall: number; tierLabel: string } {
-  const baseValues = [
-    q.originality ?? 75,
-    q.realism ?? 75,
-    q.specificity ?? 75,
-    q.emotionalExpressiveness ?? 75,
-    q.readerInterest ?? 75,
-    q.diversity ?? 75,
-    q.discussionPotential ?? 75,
-    q.mechanicQuality ?? 75,
-  ];
-  const specificValues =
-    collection === 'debate'
-      ? [
-          q.ambiguity ?? 75,
-          q.bothSidesArgumentation ?? 75,
-          q.debatePotential ?? 75,
-        ]
-      : [
-          q.warmth ?? 76,
-          q.naturalness ?? 76,
-          q.emotionalDetailPower ?? 76,
-          q.relatability ?? 76,
-          q.nonSaccharine ?? 76,
-        ];
-  const all = [...baseValues, ...specificValues];
-  const overall = Math.round(all.reduce((acc, v) => acc + v, 0) / all.length);
-  return { overall, tierLabel: getResearchQualityTier(overall) };
+  collection: CollectionType,
+  partial?: Partial<ResearchQualityScore['breakdown']>,
+  explanation?: string
+): ResearchQualityScore {
+  const clamp = (v: number | undefined, fallback = 84) =>
+    Math.max(0, Math.min(100, Math.round(typeof v === 'number' && !Number.isNaN(v) ? v : fallback)));
+
+  const breakdown: ResearchQualityScore['breakdown'] = {
+    originality: clamp(partial?.originality, 86),
+    realism: clamp(partial?.realism, 88),
+    specificity: clamp(partial?.specificity, 86),
+    emotionalExpressiveness: clamp(partial?.emotionalExpressiveness, 87),
+    readerInterest: clamp(partial?.readerInterest, 88),
+    diversity: clamp(partial?.diversity, 85),
+    discussionPotential: clamp(partial?.discussionPotential, collection === 'debate' ? 89 : 80),
+    mechanicQuality: clamp(partial?.mechanicQuality, 86),
+  };
+
+  if (collection === 'debate') {
+    breakdown.ambiguity = clamp(partial?.ambiguity, 88);
+    breakdown.bothSidesArgument = clamp(partial?.bothSidesArgument, 87);
+    breakdown.debatePotential = clamp(partial?.debatePotential, 89);
+  } else {
+    breakdown.warmth = clamp(partial?.warmth, 89);
+    breakdown.naturalness = clamp(partial?.naturalness, 88);
+    breakdown.detailStrength = clamp(partial?.detailStrength, 87);
+    breakdown.relatability = clamp(partial?.relatability, 88);
+    breakdown.antiSaccharine = clamp(partial?.antiSaccharine, 86);
+  }
+
+  const values = Object.values(breakdown).filter((v): v is number => typeof v === 'number');
+  const overall = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+  const tierLabel = getResearchQualityTier(overall);
+
+  return {
+    overall,
+    tierLabel,
+    explanation:
+      explanation ||
+      `${tierLabel}: оценка отражает конкретику сцены, жизненную достоверность и чистоту сюжетной механики (не является прогнозом охватов).`,
+    breakdown,
+  };
 }
 
-export function researchResultToPseudoStory(result: ResearchResult): StoryPlot {
-  const idea = result.generatedIdea;
-  const title = idea?.title || result.sourceTitle;
-  const shortDescription = idea?.shortDescription || result.sourceSummary;
-  const fullPlot = idea?.fullPlot || `${result.mainSituation}\n${result.mainConflict}`;
-  const coreConflictOrAction =
-    idea?.coreConflictOrAction || result.mainConflict || result.mainSituation || result.sourceTitle;
-  const category = idea?.category || result.targetCategory;
-  const mainTheme = idea?.mainTheme || result.mainSituation || result.sourceTitle;
-  const plotMechanic = idea?.plotMechanic || result.storyMechanic;
-  const keywords = idea?.keywords?.length ? idea.keywords : result.keywords;
-
-  const base: StoryPlot = {
-    id: result.researchId,
-    collection: result.collection,
-    category,
-    subcategory: idea?.subcategory || result.relationshipType || 'Зарубежное исследование',
-    title,
-    shortDescription,
-    fullPlot,
-    participants: idea?.participants || result.participants,
-    setting: idea?.setting || '',
-    coreConflictOrAction,
-    sideAPosition: idea?.sideAPosition || result.positionsOfParticipants.sideA,
-    sideBPosition: idea?.sideBPosition || result.positionsOfParticipants.sideB,
-    emotionalMechanism: idea?.emotionalMechanism || result.emotionalMechanism,
-    hiddenExpectation: idea?.hiddenExpectation || result.hiddenExpectation,
-    unexpectedNuance: idea?.unexpectedNuance || result.unexpectedDetail,
-    possibleTwist: idea?.possibleTwist || result.possibleTwist,
-    mainTriggerQuestion: idea?.mainTriggerQuestion || result.readerReactionPotential,
-    additionalQuestions: idea?.additionalQuestions || [],
-    keywords,
-    ideaSource: result.sourceName,
-    sourceUrl: result.sourceUrl,
+export function researchResultToPseudoStory(item: ResearchResult): StoryPlot {
+  const gp = item.generatedPlot;
+  const fallbackTitle = gp?.title || item.sourceTitle || item.mainSituation || item.researchId;
+  const pseudo: StoryPlot = {
+    id: item.researchId,
+    collection: item.collection,
+    category: gp?.category || '',
+    subcategory: gp?.subcategory || '',
+    title: fallbackTitle,
+    shortDescription: gp?.shortDescription || item.sourceSummary || item.mainSituation,
+    fullPlot: gp?.fullPlot || item.sourceSummary || item.sourceExcerpt,
+    participants: gp?.participants || item.participants,
+    setting: gp?.setting || item.relationshipType,
+    coreConflictOrAction: gp?.coreConflictOrAction || item.mainConflict || item.mainSituation,
+    sideAPosition: gp?.sideAPosition || item.positionsOfParticipants,
+    sideBPosition: gp?.sideBPosition || '',
+    emotionalMechanism: gp?.emotionalMechanism || item.emotionalMechanism,
+    hiddenExpectation: gp?.hiddenExpectation || item.hiddenExpectation,
+    unexpectedNuance: gp?.unexpectedNuance || item.unexpectedDetail,
+    possibleTwist: gp?.possibleTwist || item.possibleTwist,
+    mainTriggerQuestion: gp?.mainTriggerQuestion || '',
+    additionalQuestions: gp?.additionalQuestions || [],
+    keywords: gp?.keywords?.length ? gp.keywords : item.keywords || [],
+    ideaSource: item.sourceName,
+    sourceUrl: item.sourceUrl,
     originType: 'external',
-    createdAt: result.createdAt,
+    createdAt: item.researchDate,
     verificationStatus: 'pending',
     usageStatus: 'unused',
     semanticFingerprint: '',
-    mainTheme,
-    plotMechanic,
-    uniqueDetails: idea?.uniqueDetails || result.unexpectedDetail,
+    mainTheme: gp?.mainTheme || item.mainSituation,
+    plotMechanic: gp?.plotMechanic || item.storyMechanic,
+    uniqueDetails: gp?.uniqueDetails || item.unexpectedDetail,
+    sourceAnalysisNote: item.researchNotes,
     batchNumber: 0,
-    quality: {
-      overall: result.qualityBreakdown?.overall ?? 75,
-      originality: result.qualityBreakdown?.originality ?? 75,
-      realism: result.qualityBreakdown?.realism ?? 75,
-      emotionalExpressiveness: result.qualityBreakdown?.emotionalExpressiveness ?? 75,
-      interest: result.qualityBreakdown?.readerInterest ?? 75,
-      discussionPotential: result.qualityBreakdown?.discussionPotential ?? 75,
-      specificity: result.qualityBreakdown?.specificity ?? 75,
-      plotVariability: result.qualityBreakdown?.diversity ?? 75,
-      editorialNote: result.qualityBreakdown?.explanation ?? '',
-    },
+    researchId: item.researchId,
+    researchNotes: item.researchNotes,
+    quality: calculateQualityScore(item.collection),
+    similarityMatches: [],
+    duplicateFlag: false,
   };
-  base.semanticFingerprint = buildSemanticFingerprint(base);
-  return base;
+  pseudo.semanticFingerprint = buildSemanticFingerprint(pseudo);
+  return pseudo;
 }
 
 export function findResearchDuplicates(
   target: ResearchResult,
-  dbStories: StoryPlot[],
-  allResearchResults: ResearchResult[],
-  currentBatchIds: Set<string>,
+  mainStories: StoryPlot[],
+  otherResults: ResearchResult[],
   thresholdPercent = 38
-): ResearchDuplicateMatch[] {
-  const candidateStory = researchResultToPseudoStory(target);
+): SimilarityMatch[] {
+  const candidatePseudo = researchResultToPseudoStory(target);
 
-  // 1. Check against main STORY DATABASE
-  const dbMatches: ResearchDuplicateMatch[] = findSimilarStories(
-    candidateStory,
-    dbStories,
-    thresholdPercent
+  const mainMatches = findSimilarStories(candidatePseudo, mainStories, thresholdPercent);
+  const otherPseudos: StoryPlot[] = otherResults
+    .filter((r) => r.researchId !== target.researchId && r.queueStatus !== 'rejected')
+    .map((r) => researchResultToPseudoStory(r));
+
+  const researchMatches = findSimilarStories(
+    candidatePseudo,
+    otherPseudos,
+    thresholdPercent,
+    target.researchId
   ).map((m) => ({
     ...m,
-    matchScope: 'story_database' as const,
+    reason: `[Очередь исследований] ${m.reason}`,
   }));
 
-  // 2. Check against other research results (and items in current batch)
-  const otherResearch = allResearchResults.filter(
-    (r) => r.researchId !== target.researchId && r.queueStatus !== 'rejected'
-  );
-  const researchPseudoPool = otherResearch.map((r) => researchResultToPseudoStory(r));
-  const queueMatchesRaw = findSimilarStories(candidateStory, researchPseudoPool, thresholdPercent);
-
-  const queueMatches: ResearchDuplicateMatch[] = queueMatchesRaw.map((m) => ({
-    ...m,
-    matchScope: currentBatchIds.has(m.matchedId) ? 'current_batch' : 'research_queue',
-  }));
-
-  // Also check exact same verified sourceUrl across non-rejected research items or DB stories
-  const normalizedUrl = target.sourceUrl.trim().toLowerCase().replace(/\/+$/, '');
-  if (normalizedUrl) {
-    for (const s of dbStories) {
-      if (
-        s.sourceUrl &&
-        s.sourceUrl.trim().toLowerCase().replace(/\/+$/, '') === normalizedUrl &&
-        !dbMatches.some((m) => m.matchedId === s.id)
-      ) {
-        dbMatches.unshift({
-          matchedId: s.id,
-          matchedTitle: s.title,
-          matchedShortDescription: s.shortDescription,
-          matchedCollection: s.collection,
-          matchedCategory: s.category,
-          similarityScore: 99,
-          sharedKeywords: ['sourceUrl'],
-          reason: 'Совпадение 99%: этот же внешний URL уже сохранён в основной базе сюжетов.',
-          matchScope: 'story_database',
-        });
-      }
-    }
-    for (const r of otherResearch) {
-      if (
-        r.sourceUrl &&
-        r.sourceUrl.trim().toLowerCase().replace(/\/+$/, '') === normalizedUrl &&
-        !queueMatches.some((m) => m.matchedId === r.researchId)
-      ) {
-        queueMatches.unshift({
-          matchedId: r.researchId,
-          matchedTitle: r.generatedIdea?.title || r.sourceTitle,
-          matchedShortDescription: r.sourceSummary,
-          matchedCollection: r.collection,
-          matchedCategory: r.targetCategory,
-          similarityScore: 99,
-          sharedKeywords: ['sourceUrl'],
-          reason: 'Совпадение 99%: этот же внешний URL уже исследован ранее.',
-          matchScope: currentBatchIds.has(r.researchId) ? 'current_batch' : 'research_queue',
-        });
-      }
+  const combined = new Map<string, SimilarityMatch>();
+  for (const m of [...mainMatches, ...researchMatches]) {
+    const prev = combined.get(m.storyId);
+    if (!prev || m.score > prev.score) {
+      combined.set(m.storyId, m);
     }
   }
 
-  return [...dbMatches, ...queueMatches]
-    .sort((a, b) => b.similarityScore - a.similarityScore)
-    .slice(0, 8);
+  return Array.from(combined.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
 }
 
 export function researchResultsToCsv(results: ResearchResult[]): string {
   const headers = [
-    'research_id',
-    'job_id',
+    'researchId',
+    'jobId',
     'collection',
-    'queue_status',
-    'source_name',
-    'source_url',
-    'source_title',
-    'source_author',
-    'source_date',
-    'research_date',
-    'source_reliability',
-    'target_category',
-    'story_mechanic',
-    'main_situation',
-    'main_conflict',
-    'emotional_mechanism',
-    'hidden_expectation',
-    'unexpected_detail',
-    'possible_twist',
-    'originality_assessment',
-    'quality_overall',
-    'quality_tier',
-    'idea_title',
-    'idea_short_description',
-    'idea_full_plot',
-    'duplicate_flag',
-    'saved_story_id',
+    'sourceName',
+    'sourceUrl',
+    'sourceTitle',
+    'sourceAuthor',
+    'sourceDate',
+    'researchDate',
+    'analysisStatus',
+    'queueStatus',
+    'sourceReliability',
+    'mainSituation',
+    'storyMechanic',
+    'generatedTitle',
+    'generatedFullPlot',
+    'qualityOverall',
+    'qualityTier',
+    'duplicateFlag',
+    'approvedStoryId',
   ];
 
-  const escapeCell = (val: unknown): string => {
-    const str = String(val ?? '').replace(/\r?\n/g, ' ');
-    if (/[",;\n]/.test(str)) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
+  const escape = (val: unknown): string => {
+    const str = Array.isArray(val) ? val.join(' | ') : String(val ?? '');
+    return `"${str.replace(/"/g, '""')}"`;
   };
 
   const rows = results.map((r) =>
@@ -608,43 +574,27 @@ export function researchResultsToCsv(results: ResearchResult[]): string {
       r.researchId,
       r.jobId,
       r.collection,
-      r.queueStatus,
       r.sourceName,
       r.sourceUrl,
       r.sourceTitle,
       r.sourceAuthor,
       r.sourceDate,
       r.researchDate,
+      r.analysisStatus,
+      r.queueStatus,
       r.sourceReliability,
-      r.targetCategory,
-      r.storyMechanic,
       r.mainSituation,
-      r.mainConflict,
-      r.emotionalMechanism,
-      r.hiddenExpectation,
-      r.unexpectedDetail,
-      r.possibleTwist,
-      r.originalityAssessment,
-      r.qualityBreakdown?.overall ?? 0,
-      r.qualityBreakdown?.tierLabel ?? '',
-      r.generatedIdea?.title ?? '',
-      r.generatedIdea?.shortDescription ?? '',
-      r.generatedIdea?.fullPlot ?? '',
-      r.duplicateFlag ? 'true' : 'false',
-      r.savedStoryId ?? '',
+      r.storyMechanic,
+      r.generatedPlot?.title ?? '',
+      r.generatedPlot?.fullPlot ?? '',
+      r.quality?.overall ?? '',
+      r.quality?.tierLabel ?? '',
+      r.duplicateFlag,
+      r.approvedStoryId ?? '',
     ]
-      .map(escapeCell)
+      .map(escape)
       .join(',')
   );
 
-  return '\uFEFF' + [headers.join(','), ...rows].join('\n');
+  return '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
 }
-
-// --- Compatibility Aliases for legacy server.ts / tests ---
-export function calculateQualityScore(
-  metrics: Parameters<typeof calculateOverallQuality>[0],
-  collection: CollectionType
-): number {
-  return calculateOverallQuality(metrics, collection);
-}
-

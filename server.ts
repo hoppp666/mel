@@ -1,755 +1,506 @@
 import 'dotenv/config';
 import express from 'express';
-import fs from 'node:fs';
-import path from 'node:path';
-import { createServer as createViteServer } from 'vite';
-import { generateStoryBatch } from './server/geminiBatch.ts';
-import { buildProjectZipBuffer } from './server/zipBuilder.ts';
+import fs from 'fs';
+import path from 'path';
 import {
-  computeDatabaseStats,
-  createBackupSnapshot,
-  generateNextBatchNumber,
-  generateNextStoryId,
-  listBackupSnapshots,
-  loadDatabase,
-  normalizeAndScoreStory,
-  saveDatabase,
-} from './server/storage.ts';
+  CollectionType,
+  ResearchSource,
+  StoryPlot,
+  UsageStatus,
+  VerificationStatus,
+} from './src/shared/types.js';
 import {
   buildSemanticFingerprint,
-  calculateOverallQuality,
-  calculateResearchQuality,
+  calculateQualityScore,
   findSimilarStories,
   researchResultsToCsv,
   storiesToCsv,
-} from './src/shared/similarity.ts';
+} from './src/shared/similarity.js';
 import {
-  approveResearchResultToDatabase,
-  checkDuplicateForResearchResult,
-  generateIdeaForResearchResult,
-  getActiveResearchJobId,
-  reanalyzeResearchResult,
-  rejectResearchResult,
-  requestCancelResearchJob,
-  startResearchJobAsync,
-} from './server/researchEngine.ts';
-import { extractDomainFromUrl, probeSourceAvailability } from './server/researchSources.ts';
+  buildSnapshotResponse,
+  createBackupSnapshot,
+  loadDatabase,
+  loadPendingBatch,
+  nextBatchNumber,
+  nextStoryId,
+  normalizeAndScoreStory,
+  restoreBackup,
+  saveDatabase,
+  savePendingBatch,
+} from './server/storage.js';
+import { generateStoryBatch } from './server/geminiBatch.js';
+import { buildProjectZipBuffer } from './server/zipBuilder.js';
 import {
   computeResearchStatistics,
-  createResearchBackupSnapshot,
-  listResearchBackupSnapshots,
+  createResearchBackup,
   loadResearchJobs,
   loadResearchResults,
   loadResearchSources,
   recoverInterruptedResearchJobs,
   saveResearchResults,
   saveResearchSources,
-} from './server/researchStorage.ts';
-import { registerContentRoutes } from './server/contentRoutes.ts';
+} from './server/researchStorage.js';
+import { checkResearchSourceAvailability } from './server/researchSources.js';
 import {
-  loadPhrasebook,
-  loadVoiceConfig,
-  recoverInterruptedContentDrafts,
-} from './server/contentStorage.ts';
-import type {
-  BatchRecord,
-  CollectionType,
-  ResearchResult,
-  ResearchSource,
-  StoryPlot,
-} from './src/shared/types.ts';
+  approveResearchResultToDatabase,
+  cancelResearchJob,
+  checkDuplicateForResult,
+  reanalyzeResearchResult,
+  startResearchJob,
+} from './server/researchEngine.js';
+import { recoverInterruptedDrafts } from './server/contentStorage.js';
+import { createContentRouter } from './server/contentRoutes.js';
+import {
+  getTelegramIntegrationStatus,
+  recoverInterruptedPublications,
+} from './server/publishingStorage.js';
+import { createPublishingRouter } from './server/publishingRoutes.js';
+import { formatGeminiError } from './server/geminiClient.js';
+import { recoverAutonomousState } from './server/autonomousStorage.js';
+import { createAutonomousRouter } from './server/autonomousRoutes.js';
 
 const PORT = Number(process.env.PORT || 3000);
-const STAGING_FILE = path.resolve(process.cwd(), 'data', 'pending_batch.json');
 
-interface StagedBatchState {
-  batchNumber: number;
-  collection: CollectionType;
-  targetCategory: string;
-  researchMode: 'original' | 'external_search';
-  usedSearchGrounding: boolean;
-  groundingUrls: Array<{ uri: string; title: string }>;
-  createdAt: string;
-  candidates: StoryPlot[];
-}
-
-function loadStagedBatch(): StagedBatchState | null {
-  try {
-    if (!fs.existsSync(STAGING_FILE)) return null;
-    const raw = fs.readFileSync(STAGING_FILE, 'utf-8');
-    return JSON.parse(raw) as StagedBatchState;
-  } catch {
-    return null;
-  }
-}
-
-function saveStagedBatch(staged: StagedBatchState | null): void {
-  const dir = path.dirname(STAGING_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!staged) {
-    if (fs.existsSync(STAGING_FILE)) fs.unlinkSync(STAGING_FILE);
-    return;
-  }
-  fs.writeFileSync(STAGING_FILE, JSON.stringify(staged, null, 2), 'utf-8');
-}
-
-async function startServer() {
+async function bootstrap() {
   const app = express();
-  app.use(express.json({ limit: '15mb' }));
+  app.use(express.json({ limit: '12mb' }));
 
-  // Ensure initial DB and research stores exist on startup; recover any interrupted jobs
+  // Initialize & recover storages on boot
   loadDatabase();
-  loadResearchSources();
   recoverInterruptedResearchJobs();
-  loadVoiceConfig();
-  loadPhrasebook();
-  recoverInterruptedContentDrafts();
+  recoverInterruptedDrafts();
+  recoverInterruptedPublications();
+  recoverAutonomousState();
 
-  // API: Full state + stats
+  // ============================================================================
+  // ЭТАП 1: STORY DATABASE GENERATOR & EXPORT API
+  // ============================================================================
+
   app.get('/api/database', (_req, res) => {
-    const db = loadDatabase();
-    const stats = computeDatabaseStats(db);
-    const backups = listBackupSnapshots();
-    const stagedBatch = loadStagedBatch();
-    res.json({
-      ...db,
-      stats,
-      backups,
-      stagedBatch,
-    });
+    res.json(buildSnapshotResponse());
   });
 
-  // API: Check semantic similarity before saving
+  app.get('/api/integrations/status', (_req, res) => {
+    res.json(getTelegramIntegrationStatus());
+  });
+
   app.post('/api/stories/check-similarity', (req, res) => {
     const db = loadDatabase();
     const candidate = req.body as Partial<StoryPlot>;
-    const threshold = Number(req.body.threshold ?? db.settings.similarityThreshold ?? 38);
-    const matches = findSimilarStories(candidate, db.stories, threshold);
-    res.json({
-      hasDuplicates: matches.length > 0,
-      matches,
-    });
+    const matches = findSimilarStories(
+      candidate,
+      db.stories,
+      db.settings.similarityThreshold,
+      candidate.id
+    );
+    res.json({ matches, duplicateFlag: matches.length > 0 });
   });
 
-  // API: Add a manual story plot (blocks duplicates unless forceSave === true)
   app.post('/api/stories', (req, res) => {
     const db = loadDatabase();
-    const { story, forceSave } = req.body as { story: Partial<StoryPlot>; forceSave?: boolean };
-    if (!story || !story.title || !story.fullPlot) {
-      res.status(400).json({ error: 'Обязательно укажите название и полную сюжетную основу.' });
-      return;
+    const payload = req.body as Partial<StoryPlot> & { forceSave?: boolean };
+    const collection: CollectionType = payload.collection === 'romantic' ? 'romantic' : 'debate';
+
+    if (!payload.title || !payload.fullPlot) {
+      return res.status(400).json({ error: 'Заполните минимум название и полную сюжетную основу.' });
     }
 
-    const normalized = normalizeAndScoreStory(
-      story,
+    const tempStory = normalizeAndScoreStory(
+      {
+        ...payload,
+        id: nextStoryId(db.stories, collection),
+        collection,
+        createdAt: new Date().toISOString(),
+        verificationStatus: payload.verificationStatus || 'pending',
+        usageStatus: payload.usageStatus || 'unused',
+      },
       db.stories,
       db.settings.similarityThreshold
     );
 
-    if (normalized.duplicateFlag && !forceSave) {
-      res.status(409).json({
-        error: 'Обнаружены смысловые совпадения с существующими сюжетами. Запись не сохранена автоматически.',
-        matches: normalized.similarityMatches,
-        candidate: normalized,
+    if (tempStory.duplicateFlag && !payload.forceSave) {
+      return res.status(409).json({
+        error: 'Обнаружены смысловые совпадения с существующими сюжетами.',
+        matches: tempStory.similarityMatches,
       });
-      return;
     }
 
-    normalized.id = generateNextStoryId(db.stories, normalized.collection);
-    db.stories.unshift(normalized);
+    db.stories.push(tempStory);
     saveDatabase(db);
-
-    res.status(201).json({
-      story: normalized,
-      stats: computeDatabaseStats(db),
-    });
+    res.status(201).json({ story: tempStory, snapshot: buildSnapshotResponse() });
   });
 
-  // API: Update existing story plot
   app.put('/api/stories/:id', (req, res) => {
     const db = loadDatabase();
-    const { id } = req.params;
-    const idx = db.stories.findIndex((s) => s.id === id);
-    if (idx === -1) {
-      res.status(404).json({ error: 'Сюжет не найден.' });
-      return;
-    }
+    const idx = db.stories.findIndex((s) => s.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Сюжет не найден' });
 
-    const updatedInput = req.body as Partial<StoryPlot>;
-    const current = db.stories[idx];
-    const merged: StoryPlot = {
-      ...current,
-      ...updatedInput,
-      id: current.id,
-      quality: {
-        ...current.quality,
-        ...(updatedInput.quality || {}),
+    const existing = db.stories[idx];
+    const updates = req.body as Partial<StoryPlot>;
+    const others = db.stories.filter((s) => s.id !== existing.id);
+
+    const updated = normalizeAndScoreStory(
+      {
+        ...existing,
+        ...updates,
+        id: existing.id,
+        collection: existing.collection,
+        quality:
+          updates.quality ||
+          calculateQualityScore(existing.collection, existing.quality?.breakdown, existing.quality?.editorialNote),
       },
-      updatedAt: new Date().toISOString(),
-    };
-    merged.quality.overall = calculateOverallQuality(merged.quality, merged.collection);
-    merged.semanticFingerprint = buildSemanticFingerprint(merged);
-    const others = db.stories.filter((s) => s.id !== id);
-    const matches = findSimilarStories(merged, others, db.settings.similarityThreshold);
-    merged.similarityMatches = matches;
-    merged.duplicateFlag = matches.length > 0;
+      others,
+      db.settings.similarityThreshold
+    );
 
-    db.stories[idx] = merged;
+    db.stories[idx] = updated;
     saveDatabase(db);
-
-    res.json({
-      story: merged,
-      stats: computeDatabaseStats(db),
-    });
+    res.json({ story: updated, snapshot: buildSnapshotResponse() });
   });
 
-  // API: Quick status change (approve, reject, needs_revision, pending, usageStatus)
   app.patch('/api/stories/:id/status', (req, res) => {
     const db = loadDatabase();
-    const { id } = req.params;
-    const idx = db.stories.findIndex((s) => s.id === id);
-    if (idx === -1) {
-      res.status(404).json({ error: 'Сюжет не найден.' });
-      return;
-    }
-    const { verificationStatus, usageStatus, duplicateFlag } = req.body;
-    if (verificationStatus) db.stories[idx].verificationStatus = verificationStatus;
-    if (usageStatus) db.stories[idx].usageStatus = usageStatus;
-    if (typeof duplicateFlag === 'boolean') db.stories[idx].duplicateFlag = duplicateFlag;
-    db.stories[idx].updatedAt = new Date().toISOString();
+    const story = db.stories.find((s) => s.id === req.params.id);
+    if (!story) return res.status(404).json({ error: 'Сюжет не найден' });
 
+    const { verificationStatus, usageStatus } = req.body as {
+      verificationStatus?: VerificationStatus;
+      usageStatus?: UsageStatus;
+    };
+    if (verificationStatus) story.verificationStatus = verificationStatus;
+    if (usageStatus) story.usageStatus = usageStatus;
     saveDatabase(db);
-    res.json({
-      story: db.stories[idx],
-      stats: computeDatabaseStats(db),
-    });
+    res.json({ story, snapshot: buildSnapshotResponse() });
   });
 
-  // API: Merge a staged or duplicate story into an existing record
   app.post('/api/stories/merge', (req, res) => {
+    const { targetStoryId, nuanceToAppend, newTitle } = req.body as {
+      targetStoryId: string;
+      nuanceToAppend: string;
+      newTitle?: string;
+    };
     const db = loadDatabase();
-    const { targetId, mergedFields, removeDuplicateId } = req.body as {
-      targetId: string;
-      mergedFields: Partial<StoryPlot>;
-      removeDuplicateId?: string;
-    };
+    const target = db.stories.find((s) => s.id === targetStoryId);
+    if (!target) return res.status(404).json({ error: 'Целевой сюжет не найден' });
 
-    const idx = db.stories.findIndex((s) => s.id === targetId);
-    if (idx === -1) {
-      res.status(404).json({ error: 'Целевой сюжет для объединения не найден.' });
-      return;
+    if (nuanceToAppend) {
+      target.unexpectedNuance = `${target.unexpectedNuance} | Доп. нюанс: ${nuanceToAppend}`.trim();
     }
-
-    const updated: StoryPlot = {
-      ...db.stories[idx],
-      ...mergedFields,
-      id: db.stories[idx].id,
-      updatedAt: new Date().toISOString(),
-    };
-    updated.semanticFingerprint = buildSemanticFingerprint(updated);
-    updated.quality.overall = calculateOverallQuality(updated.quality, updated.collection);
-    db.stories[idx] = updated;
-
-    if (removeDuplicateId) {
-      db.stories = db.stories.filter((s) => s.id !== removeDuplicateId);
+    if (newTitle) {
+      target.title = newTitle.trim();
     }
-
+    target.semanticFingerprint = buildSemanticFingerprint(target);
     saveDatabase(db);
-    res.json({
-      story: updated,
-      stats: computeDatabaseStats(db),
-    });
+    res.json({ story: target, snapshot: buildSnapshotResponse() });
   });
 
-  // API: Delete story
   app.delete('/api/stories/:id', (req, res) => {
     const db = loadDatabase();
-    const { id } = req.params;
-    const before = db.stories.length;
-    db.stories = db.stories.filter((s) => s.id !== id);
-    if (db.stories.length === before) {
-      res.status(404).json({ error: 'Сюжет не найден.' });
-      return;
-    }
+    const exists = db.stories.some((s) => s.id === req.params.id);
+    if (!exists) return res.status(404).json({ error: 'Сюжет не найден' });
+    db.stories = db.stories.filter((s) => s.id !== req.params.id);
     saveDatabase(db);
-    res.json({ deletedId: id, stats: computeDatabaseStats(db) });
+    res.json({ deleted: true, snapshot: buildSnapshotResponse() });
   });
 
-  // API: Re-run full database deduplication scan
-  app.post('/api/uniqueness/rescan', (req, res) => {
+  app.post('/api/uniqueness/rescan', (_req, res) => {
     const db = loadDatabase();
-    const threshold = Number(req.body?.threshold ?? db.settings.similarityThreshold);
-    for (let i = 0; i < db.stories.length; i++) {
-      const others = db.stories.filter((_, idx) => idx !== i);
-      const matches = findSimilarStories(db.stories[i], others, threshold);
-      db.stories[i].similarityMatches = matches;
-      db.stories[i].duplicateFlag = matches.length > 0;
+    const rescanned: StoryPlot[] = [];
+    for (const s of db.stories) {
+      const others = db.stories.filter((o) => o.id !== s.id);
+      const matches = findSimilarStories(s, others, db.settings.similarityThreshold, s.id);
+      rescanned.push({
+        ...s,
+        semanticFingerprint: buildSemanticFingerprint(s),
+        similarityMatches: matches,
+        duplicateFlag: matches.length > 0,
+      });
     }
+    db.stories = rescanned;
     saveDatabase(db);
-    res.json({
-      stories: db.stories,
-      stats: computeDatabaseStats(db),
-    });
+    res.json({ snapshot: buildSnapshotResponse() });
   });
 
-  // API: Generate next batch via Gemini API (stages results for editor verification)
   app.post('/api/batches/generate', async (req, res) => {
     try {
+      const existingPending = loadPendingBatch();
+      if (existingPending) {
+        return res.status(409).json({
+          error: 'У вас уже есть незавершённая партия на приёмке. Завершите или сбросьте её.',
+          pendingBatch: existingPending,
+        });
+      }
+
       const db = loadDatabase();
-      const collection: CollectionType = req.body.collection === 'romantic' ? 'romantic' : 'debate';
-      const targetCategory = String(req.body.targetCategory || 'ALL_BALANCED');
-      const batchSize = Math.max(5, Math.min(50, Number(req.body.batchSize || db.settings.defaultBatchSize || 25)));
-      const researchMode = req.body.researchMode === 'external_search' ? 'external_search' : 'original';
+      const collection: CollectionType = req.body?.collection === 'romantic' ? 'romantic' : 'debate';
+      const categoryFocus = String(req.body?.categoryFocus || 'balanced');
+      const count = Math.max(5, Math.min(50, Number(req.body?.count) || db.settings.defaultBatchSize));
+      const searchMode = req.body?.searchMode === 'web_search' ? 'web_search' : 'original';
+      const batchNumber = nextBatchNumber(db, collection);
 
-      const batchNumber = generateNextBatchNumber(db, collection);
-
-      const result = await generateStoryBatch({
-        collection,
-        targetCategory,
-        batchSize,
+      const pendingBatch = await generateStoryBatch({
+        db,
         batchNumber,
-        researchMode,
-        existingStories: db.stories,
-        customCategories: db.customCategories[collection] || [],
-        similarityThreshold: db.settings.similarityThreshold,
+        collection,
+        categoryFocus,
+        count,
+        searchMode,
       });
-
-      const staged: StagedBatchState = {
-        batchNumber,
-        collection,
-        targetCategory: targetCategory === 'ALL_BALANCED' ? 'Сбалансированный подбор категорий' : targetCategory,
-        researchMode,
-        usedSearchGrounding: result.usedSearchGrounding,
-        groundingUrls: result.groundingUrls,
-        createdAt: new Date().toISOString(),
-        candidates: result.candidates,
-      };
-
-      saveStagedBatch(staged);
-      res.json({ stagedBatch: staged });
+      savePendingBatch(pendingBatch);
+      res.status(201).json({ pendingBatch });
     } catch (err) {
-      console.error('Batch generation failed:', err);
-      const message = err instanceof Error ? err.message : 'Ошибка генерации партии сюжетов';
-      res.status(500).json({ error: message });
+      const formatted = formatGeminiError(err);
+      res.status(formatted.status).json({ error: formatted.message });
     }
   });
 
-  // API: Update or decide on a single candidate inside stagedBatch
   app.patch('/api/batches/staged/:candidateId', (req, res) => {
-    const staged = loadStagedBatch();
-    if (!staged) {
-      res.status(404).json({ error: 'Активная партия на проверке не найдена.' });
-      return;
-    }
-    const { candidateId } = req.params;
-    const idx = staged.candidates.findIndex((c) => c.id === candidateId);
-    if (idx === -1) {
-      res.status(404).json({ error: 'Кандидат в партии не найден.' });
-      return;
-    }
+    const pending = loadPendingBatch();
+    if (!pending) return res.status(404).json({ error: 'Активная партия не найдена' });
 
-    const db = loadDatabase();
-    const updated: StoryPlot = {
-      ...staged.candidates[idx],
-      ...req.body,
-      id: staged.candidates[idx].id,
-      quality: {
-        ...staged.candidates[idx].quality,
-        ...(req.body.quality || {}),
-      },
+    const idx = pending.candidates.findIndex((c) => c.candidateId === req.params.candidateId);
+    if (idx === -1) return res.status(404).json({ error: 'Кандидат не найден' });
+
+    const current = pending.candidates[idx];
+    const updates = req.body || {};
+    pending.candidates[idx] = {
+      ...current,
+      ...updates,
+      candidateId: current.candidateId,
     };
-    updated.quality.overall = calculateOverallQuality(updated.quality, updated.collection);
-    updated.semanticFingerprint = buildSemanticFingerprint(updated);
-    const matches = findSimilarStories(updated, db.stories, db.settings.similarityThreshold);
-    updated.similarityMatches = matches;
-    updated.duplicateFlag = matches.length > 0;
-
-    staged.candidates[idx] = updated;
-    saveStagedBatch(staged);
-    res.json({ stagedBatch: staged });
+    savePendingBatch(pending);
+    res.json({ pendingBatch: pending });
   });
 
-  // API: Commit staged batch decisions into persistent database
-  app.post('/api/batches/commit', (req, res) => {
-    const staged = loadStagedBatch();
-    if (!staged) {
-      res.status(404).json({ error: 'Нет партии для сохранения.' });
-      return;
-    }
+  app.post('/api/batches/commit', (_req, res) => {
+    const pending = loadPendingBatch();
+    if (!pending) return res.status(404).json({ error: 'Нет партии для сохранения' });
+
     const db = loadDatabase();
-    const { acceptedIds, rejectedIds, forceIncludeDuplicates } = req.body as {
-      acceptedIds?: string[];
-      rejectedIds?: string[];
-      forceIncludeDuplicates?: boolean;
-    };
+    createBackupSnapshot(db);
 
-    const acceptSet = new Set(acceptedIds || []);
-    const rejectSet = new Set(rejectedIds || []);
-
-    let acceptedCount = 0;
-    let flaggedDuplicatesCount = 0;
+    let approvedCount = 0;
     let rejectedCount = 0;
-    const remainingCandidates: StoryPlot[] = [];
 
-    for (const cand of staged.candidates) {
-      if (rejectSet.has(cand.id) || cand.verificationStatus === 'rejected') {
+    for (const cand of pending.candidates) {
+      if (cand.decision === 'rejected') {
         rejectedCount++;
         continue;
       }
+      const newId = nextStoryId(db.stories, pending.collection);
+      const verificationStatus: VerificationStatus =
+        cand.decision === 'approved'
+          ? 'approved'
+          : cand.decision === 'needs_revision'
+            ? 'needs_revision'
+            : 'pending';
+      if (verificationStatus === 'approved') approvedCount++;
 
-      const isExplicitlyAccepted =
-        acceptSet.has(cand.id) ||
-        cand.verificationStatus === 'approved' ||
-        cand.verificationStatus === 'needs_revision';
-
-      if (!isExplicitlyAccepted) {
-        remainingCandidates.push(cand);
-        continue;
-      }
-
-      // Enforce strict uniqueness: do not save duplicates automatically unless explicitly forced
-      const matches = findSimilarStories(cand, db.stories, db.settings.similarityThreshold);
-      if (matches.length > 0 && !forceIncludeDuplicates && !acceptSet.has(cand.id)) {
-        cand.similarityMatches = matches;
-        cand.duplicateFlag = true;
-        flaggedDuplicatesCount++;
-        remainingCandidates.push(cand);
-        continue;
-      }
-
-      const finalId = generateNextStoryId(db.stories, cand.collection);
-      const savedPlot: StoryPlot = {
-        ...cand,
-        id: finalId,
-        similarityMatches: matches,
-        duplicateFlag: matches.length > 0,
-        verificationStatus: cand.verificationStatus === 'pending' ? 'approved' : cand.verificationStatus,
-        updatedAt: new Date().toISOString(),
-      };
-      db.stories.unshift(savedPlot);
-      acceptedCount++;
+      const story = normalizeAndScoreStory(
+        {
+          ...cand,
+          id: newId,
+          verificationStatus,
+          usageStatus: 'unused',
+          batchNumber: pending.batchNumber,
+        },
+        db.stories,
+        db.settings.similarityThreshold
+      );
+      db.stories.push(story);
     }
 
-    const existingBatchIdx = db.batches.findIndex((b) => b.batchNumber === staged.batchNumber);
-    const batchSummary: BatchRecord = {
-      batchNumber: staged.batchNumber,
-      collection: staged.collection,
-      targetCategory: staged.targetCategory,
-      requestedCount: staged.candidates.length,
-      generatedCount: staged.candidates.length,
-      acceptedCount:
-        (existingBatchIdx >= 0 ? db.batches[existingBatchIdx].acceptedCount : 0) + acceptedCount,
-      flaggedDuplicatesCount: remainingCandidates.filter((c) => c.duplicateFlag).length,
-      rejectedCount:
-        (existingBatchIdx >= 0 ? db.batches[existingBatchIdx].rejectedCount : 0) + rejectedCount,
-      researchMode: staged.researchMode,
-      createdAt: staged.createdAt,
-      notes: `Партия #${staged.batchNumber}: принято в базу ${acceptedCount}, отклонено ${rejectedCount}, ожидает решения ${remainingCandidates.length}.`,
-    };
-
-    if (existingBatchIdx >= 0) {
-      db.batches[existingBatchIdx] = batchSummary;
-    } else {
-      db.batches.unshift(batchSummary);
-    }
+    db.batches.push({
+      batchNumber: pending.batchNumber,
+      collection: pending.collection,
+      categoryFocus: pending.categoryFocus,
+      searchMode: pending.searchMode,
+      requestedCount: pending.candidates.length,
+      generatedCount: pending.candidates.length,
+      approvedCount,
+      rejectedCount,
+      createdAt: pending.createdAt,
+      committedAt: new Date().toISOString(),
+    });
 
     saveDatabase(db);
-    if (acceptedCount > 0) {
-      createBackupSnapshot(db);
-    }
-
-    if (remainingCandidates.length === 0) {
-      saveStagedBatch(null);
-      res.json({
-        stagedBatch: null,
-        committedCount: acceptedCount,
-        rejectedCount,
-        stats: computeDatabaseStats(db),
-        batches: db.batches,
-        stories: db.stories,
-        backups: listBackupSnapshots(),
-      });
-    } else {
-      const nextStaged = { ...staged, candidates: remainingCandidates };
-      saveStagedBatch(nextStaged);
-      res.json({
-        stagedBatch: nextStaged,
-        committedCount: acceptedCount,
-        rejectedCount,
-        stats: computeDatabaseStats(db),
-        batches: db.batches,
-        stories: db.stories,
-        backups: listBackupSnapshots(),
-      });
-    }
+    savePendingBatch(null);
+    res.json({ snapshot: buildSnapshotResponse() });
   });
 
   app.delete('/api/batches/staged', (_req, res) => {
-    saveStagedBatch(null);
-    res.json({ ok: true });
+    savePendingBatch(null);
+    res.json({ cleared: true, snapshot: buildSnapshotResponse() });
   });
 
-  // API: Add custom category
   app.post('/api/categories', (req, res) => {
+    const { collection, name, subcategories } = req.body || {};
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'Название категории обязательно' });
+    }
     const db = loadDatabase();
-    const collection: CollectionType = req.body.collection === 'romantic' ? 'romantic' : 'debate';
-    const name = String(req.body.name || '').trim();
-    if (!name) {
-      res.status(400).json({ error: 'Введите название категории.' });
-      return;
-    }
-    if (!db.customCategories[collection].includes(name)) {
-      db.customCategories[collection].push(name);
-      saveDatabase(db);
-    }
-    res.json({ customCategories: db.customCategories });
+    db.customCategories.push({
+      id: `CAT-${Date.now().toString(36).toUpperCase()}`,
+      collection: collection === 'romantic' ? 'romantic' : 'debate',
+      name: String(name).trim(),
+      subcategories: Array.isArray(subcategories) ? subcategories : [],
+      createdAt: new Date().toISOString(),
+    });
+    saveDatabase(db);
+    res.status(201).json({ snapshot: buildSnapshotResponse() });
   });
 
-  // API: Update settings
   app.put('/api/settings', (req, res) => {
     const db = loadDatabase();
-    db.settings = {
-      ...db.settings,
-      ...req.body,
-      storageMode: 'local_disk',
-    };
+    db.settings = { ...db.settings, ...(req.body || {}) };
     saveDatabase(db);
-    res.json({
-      settings: db.settings,
-      stats: computeDatabaseStats(db),
-    });
+    res.json({ snapshot: buildSnapshotResponse() });
   });
 
-  // API: Create backup snapshot
   app.post('/api/backup', (_req, res) => {
-    const db = loadDatabase();
-    const filename = createBackupSnapshot(db);
-    res.json({
-      filename,
-      backups: listBackupSnapshots(),
-    });
+    const backup = createBackupSnapshot();
+    res.json({ backup, snapshot: buildSnapshotResponse() });
   });
 
-  // API: Restore backup snapshot
   app.post('/api/backup/restore', (req, res) => {
-    const filename = String(req.body.filename || '');
-    const safeName = path.basename(filename);
-    const target = path.resolve(process.cwd(), 'data', 'backups', safeName);
-    if (!fs.existsSync(target)) {
-      res.status(404).json({ error: 'Файл резервной копии не найден.' });
-      return;
+    try {
+      const filename = String(req.body?.filename || '');
+      restoreBackup(filename);
+      res.json({ snapshot: buildSnapshotResponse() });
+    } catch (err) {
+      res.status(404).json({ error: err instanceof Error ? err.message : 'Снимок не найден' });
     }
-    const raw = fs.readFileSync(target, 'utf-8');
-    const restored = JSON.parse(raw);
-    saveDatabase(restored);
-    res.json({
-      ...restored,
-      stats: computeDatabaseStats(restored),
-      backups: listBackupSnapshots(),
-    });
   });
 
-  // API: Import JSON stories with duplicate protection
   app.post('/api/import', (req, res) => {
-    const db = loadDatabase();
-    const { stories: incoming, skipDuplicates } = req.body as {
-      stories: Array<Partial<StoryPlot>>;
-      skipDuplicates?: boolean;
-    };
-    if (!Array.isArray(incoming)) {
-      res.status(400).json({ error: 'Ожидается массив историй в JSON.' });
-      return;
+    const rawStories = Array.isArray(req.body?.stories)
+      ? req.body.stories
+      : Array.isArray(req.body)
+        ? req.body
+        : null;
+    if (!rawStories) {
+      return res.status(400).json({ error: 'Ожидается массив stories в JSON' });
     }
 
-    let importedCount = 0;
-    let skippedDuplicatesCount = 0;
+    const db = loadDatabase();
+    createBackupSnapshot(db);
+    let imported = 0;
+    let skippedDuplicates = 0;
 
-    for (const item of incoming) {
-      if (!item.title || !item.fullPlot) continue;
-      const normalized = normalizeAndScoreStory(item, db.stories, db.settings.similarityThreshold);
-      if (normalized.duplicateFlag && skipDuplicates) {
-        skippedDuplicatesCount++;
+    for (const raw of rawStories) {
+      const collection: CollectionType = raw.collection === 'romantic' ? 'romantic' : 'debate';
+      const cand = normalizeAndScoreStory(
+        {
+          ...raw,
+          id: raw.id && !db.stories.some((s) => s.id === raw.id) ? raw.id : nextStoryId(db.stories, collection),
+          collection,
+        },
+        db.stories,
+        db.settings.similarityThreshold
+      );
+      if (cand.duplicateFlag) {
+        skippedDuplicates++;
         continue;
       }
-      normalized.id = generateNextStoryId(db.stories, normalized.collection);
-      db.stories.unshift(normalized);
-      importedCount++;
+      db.stories.push(cand);
+      imported++;
     }
 
     saveDatabase(db);
-    createBackupSnapshot(db);
-
-    res.json({
-      importedCount,
-      skippedDuplicatesCount,
-      stats: computeDatabaseStats(db),
-      stories: db.stories,
-      backups: listBackupSnapshots(),
-    });
+    res.json({ imported, skippedDuplicates, snapshot: buildSnapshotResponse() });
   });
 
-  // API: Export JSON / CSV
   app.get('/api/export/json', (req, res) => {
     const db = loadDatabase();
-    const collection = req.query.collection as string | undefined;
-    const onlyApproved = req.query.onlyApproved === 'true';
-
-    let items = db.stories;
-    if (collection === 'debate' || collection === 'romantic') {
-      items = items.filter((s) => s.collection === collection);
+    const col = req.query.collection as string | undefined;
+    const status = req.query.status as string | undefined;
+    let filtered = db.stories;
+    if (col === 'debate' || col === 'romantic') {
+      filtered = filtered.filter((s) => s.collection === col);
     }
-    if (onlyApproved) {
-      items = items.filter((s) => s.verificationStatus === 'approved');
+    if (status && status !== 'all') {
+      filtered = filtered.filter((s) => s.verificationStatus === status);
     }
-
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="melo_love_stories_${new Date().toISOString().slice(0, 10)}.json"`
-    );
-    res.send(JSON.stringify({ exportedAt: new Date().toISOString(), count: items.length, stories: items }, null, 2));
+    res.setHeader('Content-Disposition', 'attachment; filename="melo_love_stories.json"');
+    res.send(JSON.stringify({ exportedAt: new Date().toISOString(), count: filtered.length, stories: filtered }, null, 2));
   });
 
   app.get('/api/export/csv', (req, res) => {
     const db = loadDatabase();
-    const collection = req.query.collection as string | undefined;
-    const onlyApproved = req.query.onlyApproved === 'true';
-
-    let items = db.stories;
-    if (collection === 'debate' || collection === 'romantic') {
-      items = items.filter((s) => s.collection === collection);
+    const col = req.query.collection as string | undefined;
+    const status = req.query.status as string | undefined;
+    let filtered = db.stories;
+    if (col === 'debate' || col === 'romantic') {
+      filtered = filtered.filter((s) => s.collection === col);
     }
-    if (onlyApproved) {
-      items = items.filter((s) => s.verificationStatus === 'approved');
+    if (status && status !== 'all') {
+      filtered = filtered.filter((s) => s.verificationStatus === status);
     }
-
-    const csv = storiesToCsv(items);
+    const csv = storiesToCsv(filtered);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="melo_love_stories_${new Date().toISOString().slice(0, 10)}.csv"`
-    );
+    res.setHeader('Content-Disposition', 'attachment; filename="melo_love_stories.csv"');
     res.send(csv);
   });
 
-  // API: Export complete Stage 1 project + database ZIP archive for GitHub
   app.get('/api/export/archive', (_req, res) => {
-    try {
-      // Ensure data/melo_love_db.json exists and is synced before packing
-      loadDatabase();
-      const zipBuffer = buildProjectZipBuffer(process.cwd());
-      const dateStr = new Date().toISOString().slice(0, 10);
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="melo_love_stage1_github_${dateStr}.zip"`
-      );
-      res.setHeader('Content-Length', String(zipBuffer.length));
-      res.send(zipBuffer);
-    } catch (err) {
-      console.error('Archive export failed:', err);
-      res.status(500).json({ error: 'Не удалось собрать ZIP-архив проекта.' });
-    }
+    const { buffer } = buildProjectZipBuffer();
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="melo_love_project.zip"');
+    res.send(buffer);
   });
 
-  /* ==========================================================================
-     STAGE 2: FOREIGN RESEARCH ENGINE API
-     ========================================================================== */
+  // ============================================================================
+  // ЭТАП 2: FOREIGN RESEARCH ENGINE API
+  // ============================================================================
 
   app.get('/api/research/statistics', (_req, res) => {
-    const sources = loadResearchSources();
-    const jobs = loadResearchJobs();
-    const results = loadResearchResults();
-    const stats = computeResearchStatistics(sources, jobs, results);
-    res.json({
-      stats,
-      activeJobId: getActiveResearchJobId(),
-      geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
-      backups: listResearchBackupSnapshots(),
-    });
+    res.json({ statistics: computeResearchStatistics() });
   });
 
   app.get('/api/research/sources', (_req, res) => {
-    const sources = loadResearchSources();
-    res.json({ sources });
+    res.json({ sources: loadResearchSources() });
   });
 
   app.post('/api/research/sources', (req, res) => {
+    const body = req.body || {};
+    if (!body.name || !body.url) {
+      return res.status(400).json({ error: 'Укажите название и URL источника' });
+    }
     const sources = loadResearchSources();
-    const { name, url, platform, sourceType, language, directions, notes } = req.body as {
-      name?: string;
-      url?: string;
-      platform?: 'reddit' | 'media' | 'custom';
-      sourceType?: string;
-      language?: string;
-      directions?: CollectionType[];
-      notes?: string;
-    };
-
-    const cleanName = String(name || '').trim();
-    const cleanUrl = String(url || '').trim();
-    if (!cleanName || !cleanUrl) {
-      res.status(400).json({ error: 'Укажите название и корректный URL источника.' });
-      return;
-    }
-
-    const domain = extractDomainFromUrl(cleanUrl);
-    if (!domain) {
-      res.status(400).json({ error: 'Некорректный формат URL (ожидается https://...).' });
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const newSource: ResearchSource = {
-      id: `custom-${Date.now().toString(36)}`,
-      name: cleanName,
-      url: cleanUrl,
-      domain,
-      platform: platform || (domain.includes('reddit.com') ? 'reddit' : 'custom'),
-      sourceType: sourceType || 'Пользовательский источник',
-      language: language || 'en',
-      directions:
-        Array.isArray(directions) && directions.length > 0 ? directions : ['debate', 'romantic'],
-      enabled: true,
-      isCustom: true,
-      availabilityStatus: 'unchecked',
-      availabilityMessage: 'Доступность ещё не проверялась',
+    const newSrc: ResearchSource = {
+      id: `SRC-${Date.now().toString(36).toUpperCase()}`,
+      name: String(body.name).trim(),
+      url: String(body.url).trim(),
+      rssUrl: body.rssUrl ? String(body.rssUrl).trim() : undefined,
+      sourceType: body.sourceType || 'media',
+      defaultCollection: body.defaultCollection || 'both',
+      language: body.language || 'en',
+      enabled: body.enabled !== false,
+      isSystem: false,
+      status: 'unchecked',
       robotsAllowed: null,
-      lastCheckedAt: null,
-      itemsFoundCount: 0,
-      notes: String(notes || '').trim(),
-      createdAt: now,
-      updatedAt: now,
+      foundCount: 0,
     };
-
-    sources.push(newSource);
+    sources.push(newSrc);
     saveResearchSources(sources);
-    res.status(201).json({ source: newSource, sources });
+    res.status(201).json({ source: newSrc, sources });
+  });
+
+  app.patch('/api/research/sources/:id', (req, res) => {
+    const sources = loadResearchSources();
+    const idx = sources.findIndex((s) => s.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Источник не найден' });
+    sources[idx] = { ...sources[idx], ...(req.body || {}), id: sources[idx].id };
+    saveResearchSources(sources);
+    res.json({ source: sources[idx], sources });
   });
 
   app.put('/api/research/sources/:id', (req, res) => {
     const sources = loadResearchSources();
     const idx = sources.findIndex((s) => s.id === req.params.id);
-    if (idx === -1) {
-      res.status(404).json({ error: 'Источник не найден.' });
-      return;
-    }
-    const patch = req.body as Partial<ResearchSource>;
-    const updatedUrl = patch.url !== undefined ? String(patch.url).trim() : sources[idx].url;
-    const domain = extractDomainFromUrl(updatedUrl) || sources[idx].domain;
-
-    sources[idx] = {
-      ...sources[idx],
-      name: patch.name !== undefined ? String(patch.name).trim() : sources[idx].name,
-      url: updatedUrl,
-      domain,
-      sourceType: patch.sourceType !== undefined ? String(patch.sourceType) : sources[idx].sourceType,
-      language: patch.language !== undefined ? String(patch.language) : sources[idx].language,
-      directions: Array.isArray(patch.directions) ? patch.directions : sources[idx].directions,
-      enabled: typeof patch.enabled === 'boolean' ? patch.enabled : sources[idx].enabled,
-      notes: patch.notes !== undefined ? String(patch.notes) : sources[idx].notes,
-      updatedAt: new Date().toISOString(),
-    };
+    if (idx === -1) return res.status(404).json({ error: 'Источник не найден' });
+    sources[idx] = { ...sources[idx], ...(req.body || {}), id: sources[idx].id };
     saveResearchSources(sources);
     res.json({ source: sources[idx], sources });
   });
@@ -757,29 +508,20 @@ async function startServer() {
   app.delete('/api/research/sources/:id', (req, res) => {
     const sources = loadResearchSources();
     const target = sources.find((s) => s.id === req.params.id);
-    if (!target) {
-      res.status(404).json({ error: 'Источник не найден.' });
-      return;
+    if (!target) return res.status(404).json({ error: 'Источник не найден' });
+    if (target.isSystem) {
+      return res.status(400).json({ error: 'Системный источник можно только отключить, но не удалить.' });
     }
-    if (!target.isCustom) {
-      res.status(400).json({
-        error: 'Базовые системные источники можно отключить, но нельзя удалить безвозвратно.',
-      });
-      return;
-    }
-    const next = sources.filter((s) => s.id !== req.params.id);
-    saveResearchSources(next);
-    res.json({ deletedId: req.params.id, sources: next });
+    const filtered = sources.filter((s) => s.id !== req.params.id);
+    saveResearchSources(filtered);
+    res.json({ deleted: true, sources: filtered });
   });
 
   app.post('/api/research/sources/:id/check', async (req, res) => {
     const sources = loadResearchSources();
     const idx = sources.findIndex((s) => s.id === req.params.id);
-    if (idx === -1) {
-      res.status(404).json({ error: 'Источник не найден.' });
-      return;
-    }
-    const checked = await probeSourceAvailability(sources[idx]);
+    if (idx === -1) return res.status(404).json({ error: 'Источник не найден' });
+    const checked = await checkResearchSourceAvailability(sources[idx]);
     sources[idx] = checked;
     saveResearchSources(sources);
     res.json({ source: checked, sources });
@@ -787,275 +529,165 @@ async function startServer() {
 
   app.post('/api/research/sources/check-all', async (_req, res) => {
     const sources = loadResearchSources();
-    const updated: ResearchSource[] = [];
-    for (const src of sources) {
-      if (src.enabled) {
-        updated.push(await probeSourceAvailability(src));
-      } else {
-        updated.push(src);
-      }
-    }
-    saveResearchSources(updated);
-    res.json({ sources: updated });
+    const checkedAll = await Promise.all(
+      sources.map((s) => checkResearchSourceAvailability(s))
+    );
+    saveResearchSources(checkedAll);
+    res.json({ sources: checkedAll });
   });
 
   app.post('/api/research/search', (req, res) => {
     try {
-      const {
-        collection,
-        sourceIds,
-        category,
-        sourceLanguage,
-        requestedCount,
-        depth,
-        conversionMode,
-      } = req.body as {
-        collection?: CollectionType;
-        sourceIds?: string[];
-        category?: string;
-        sourceLanguage?: string;
-        requestedCount?: number;
-        depth?: 'standard' | 'deep';
-        conversionMode?: 'analysis_only' | 'analysis_and_idea';
-      };
-
-      const job = startResearchJobAsync({
-        collection: collection === 'romantic' ? 'romantic' : 'debate',
-        sourceIds: Array.isArray(sourceIds) ? sourceIds : [],
-        category: String(category || 'ALL_BALANCED'),
-        sourceLanguage: String(sourceLanguage || 'en'),
-        requestedCount: Number(requestedCount || 3),
-        depth: depth === 'deep' ? 'deep' : 'standard',
-        conversionMode:
-          conversionMode === 'analysis_only' ? 'analysis_only' : 'analysis_and_idea',
+      const body = req.body || {};
+      const job = startResearchJob({
+        collection: body.collection === 'romantic' ? 'romantic' : 'debate',
+        sourceIds: Array.isArray(body.sourceIds) ? body.sourceIds : [],
+        categoryFocus: String(body.categoryFocus || 'balanced'),
+        sourceLanguage: String(body.sourceLanguage || 'en'),
+        requestedCount: Number(body.requestedCount) || 3,
+        analysisDepth: body.analysisDepth === 'deep' ? 'deep' : 'standard',
+        transformMode: body.transformMode === 'analyze_only' ? 'analyze_only' : 'analyze_and_generate',
       });
-
       res.status(202).json({ job });
     } catch (err) {
-      res.status(409).json({
-        error: err instanceof Error ? err.message : 'Не удалось запустить исследование.',
-      });
+      const status = (err as { status?: number }).status || 400;
+      res.status(status).json({ error: err instanceof Error ? err.message : 'Ошибка запуска поиска' });
     }
   });
 
   app.get('/api/research/jobs', (_req, res) => {
-    const jobs = loadResearchJobs();
-    res.json({ jobs, activeJobId: getActiveResearchJobId() });
+    res.json({ jobs: loadResearchJobs() });
   });
 
   app.get('/api/research/jobs/:id', (req, res) => {
-    const jobs = loadResearchJobs();
-    const job = jobs.find((j) => j.id === req.params.id);
-    if (!job) {
-      res.status(404).json({ error: 'Задание исследования не найдено.' });
-      return;
-    }
+    const job = loadResearchJobs().find((j) => j.id === req.params.id);
+    if (!job) return res.status(404).json({ error: 'Задание не найдено' });
     res.json({ job });
   });
 
   app.post('/api/research/jobs/:id/cancel', (req, res) => {
-    const ok = requestCancelResearchJob(req.params.id);
-    if (!ok) {
-      res.status(400).json({ error: 'Задание не найдено или уже завершено.' });
-      return;
+    try {
+      const job = cancelResearchJob(req.params.id);
+      res.json({ job });
+    } catch (err) {
+      const status = (err as { status?: number }).status || 404;
+      res.status(status).json({ error: err instanceof Error ? err.message : 'Ошибка отмены' });
     }
-    const jobs = loadResearchJobs();
-    const job = jobs.find((j) => j.id === req.params.id);
-    res.json({ ok: true, job });
   });
 
-  app.get('/api/research/results', (req, res) => {
-    let results = loadResearchResults();
-    const collection = req.query.collection as string | undefined;
-    const queueStatus = req.query.queueStatus as string | undefined;
-    const sourceId = req.query.sourceId as string | undefined;
-
-    if (collection === 'debate' || collection === 'romantic') {
-      results = results.filter((r) => r.collection === collection);
-    }
-    if (queueStatus && queueStatus !== 'ALL') {
-      results = results.filter((r) => r.queueStatus === queueStatus);
-    }
-    if (sourceId && sourceId !== 'ALL') {
-      results = results.filter((r) => r.sourceId === sourceId);
-    }
-
-    res.json({ results });
+  app.get('/api/research/results', (_req, res) => {
+    res.json({ results: loadResearchResults() });
   });
 
   app.get('/api/research/results/:id', (req, res) => {
-    const results = loadResearchResults();
-    const result = results.find((r) => r.researchId === req.params.id);
-    if (!result) {
-      res.status(404).json({ error: 'Карточка исследования не найдена.' });
-      return;
-    }
-    res.json({ result });
+    const item = loadResearchResults().find((r) => r.researchId === req.params.id);
+    if (!item) return res.status(404).json({ error: 'Карточка не найдена' });
+    res.json({ result: item });
   });
 
   app.patch('/api/research/results/:id', (req, res) => {
     const results = loadResearchResults();
     const idx = results.findIndex((r) => r.researchId === req.params.id);
-    if (idx === -1) {
-      res.status(404).json({ error: 'Карточка исследования не найдена.' });
-      return;
-    }
-
-    const current = results[idx];
-    const patch = req.body as Partial<ResearchResult>;
-    const updatedQuality = patch.qualityBreakdown
-      ? {
-          ...current.qualityBreakdown,
-          ...patch.qualityBreakdown,
-        }
-      : current.qualityBreakdown;
-
-    if (updatedQuality) {
-      const recalc = calculateResearchQuality(updatedQuality, current.collection);
-      updatedQuality.overall = recalc.overall;
-      updatedQuality.tierLabel = recalc.tierLabel;
-    }
-
-    const updated: ResearchResult = {
-      ...current,
-      ...patch,
-      researchId: current.researchId,
-      positionsOfParticipants: {
-        ...current.positionsOfParticipants,
-        ...(patch.positionsOfParticipants || {}),
-      },
-      generatedIdea:
-        patch.generatedIdea === null
-          ? null
-          : patch.generatedIdea
-            ? {
-                ...(current.generatedIdea || ({} as NonNullable<ResearchResult['generatedIdea']>)),
-                ...patch.generatedIdea,
-              }
-            : current.generatedIdea,
-      qualityBreakdown: updatedQuality,
-      updatedAt: new Date().toISOString(),
-    };
-
-    results[idx] = updated;
+    if (idx === -1) return res.status(404).json({ error: 'Карточка не найдена' });
+    results[idx] = { ...results[idx], ...(req.body || {}), researchId: results[idx].researchId };
     saveResearchResults(results);
-    res.json({ result: updated });
+    res.json({ result: results[idx] });
   });
 
   app.post('/api/research/results/:id/analyze', async (req, res) => {
     try {
-      const updated = await reanalyzeResearchResult(req.params.id);
+      const updated = await reanalyzeResearchResult(req.params.id, false);
       res.json({ result: updated });
     } catch (err) {
-      res.status(500).json({
-        error: err instanceof Error ? err.message : 'Ошибка повторного анализа.',
-      });
+      const status = (err as { status?: number }).status || formatGeminiError(err).status;
+      res.status(status).json({ error: err instanceof Error ? err.message : 'Ошибка анализа' });
     }
   });
 
   app.post('/api/research/results/:id/generate-idea', async (req, res) => {
     try {
-      const updated = await generateIdeaForResearchResult(req.params.id);
+      const updated = await reanalyzeResearchResult(req.params.id, true);
       res.json({ result: updated });
     } catch (err) {
-      res.status(500).json({
-        error: err instanceof Error ? err.message : 'Ошибка генерации оригинальной идеи.',
-      });
+      const status = (err as { status?: number }).status || formatGeminiError(err).status;
+      res.status(status).json({ error: err instanceof Error ? err.message : 'Ошибка генерации заготовки' });
     }
   });
 
   app.post('/api/research/results/:id/check-duplicate', (req, res) => {
     try {
-      const updated = checkDuplicateForResearchResult(req.params.id);
+      const updated = checkDuplicateForResult(req.params.id);
       res.json({ result: updated });
     } catch (err) {
-      res.status(404).json({
-        error: err instanceof Error ? err.message : 'Ошибка проверки дублей.',
-      });
+      const status = (err as { status?: number }).status || 404;
+      res.status(status).json({ error: err instanceof Error ? err.message : 'Ошибка проверки дублей' });
     }
   });
 
   app.post('/api/research/results/:id/approve', (req, res) => {
     try {
-      const forceIgnoreDuplicates = Boolean(req.body?.forceIgnoreDuplicates);
-      const outcome = approveResearchResultToDatabase(req.params.id, forceIgnoreDuplicates);
-      if (outcome.duplicateBlocked) {
-        res.status(409).json({
-          error:
-            'Обнаружены потенциальные смысловые дубли. Проверьте совпадения перед добавлением в основную базу.',
-          result: outcome.result,
-          matches: outcome.result.duplicateMatches,
-        });
-        return;
-      }
-      const db = loadDatabase();
-      res.json({
-        result: outcome.result,
-        story: outcome.story,
-        dbStats: computeDatabaseStats(db),
-      });
+      const forceApprove = Boolean(req.body?.forceApprove);
+      const output = approveResearchResultToDatabase(req.params.id, forceApprove);
+      res.json({ ...output, snapshot: buildSnapshotResponse() });
     } catch (err) {
-      res.status(400).json({
-        error: err instanceof Error ? err.message : 'Не удалось добавить идею в основную базу.',
+      const status = (err as { status?: number }).status || 400;
+      const matches = (err as { matches?: unknown }).matches;
+      res.status(status).json({
+        error: err instanceof Error ? err.message : 'Ошибка одобрения',
+        matches,
       });
     }
   });
 
   app.post('/api/research/results/:id/reject', (req, res) => {
-    try {
-      const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
-      const updated = rejectResearchResult(req.params.id, reason);
-      res.json({ result: updated });
-    } catch (err) {
-      res.status(404).json({
-        error: err instanceof Error ? err.message : 'Карточка не найдена.',
-      });
-    }
+    const results = loadResearchResults();
+    const idx = results.findIndex((r) => r.researchId === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Карточка не найдена' });
+    results[idx].queueStatus = 'rejected';
+    saveResearchResults(results);
+    res.json({ result: results[idx] });
   });
 
   app.get('/api/research/export/json', (_req, res) => {
     const results = loadResearchResults();
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="melo_love_foreign_research_${new Date().toISOString().slice(0, 10)}.json"`
-    );
-    res.send(
-      JSON.stringify(
-        {
-          exportedAt: new Date().toISOString(),
-          count: results.length,
-          results,
-        },
-        null,
-        2
-      )
-    );
+    res.setHeader('Content-Disposition', 'attachment; filename="melo_love_research.json"');
+    res.send(JSON.stringify({ exportedAt: new Date().toISOString(), count: results.length, results }, null, 2));
   });
 
   app.get('/api/research/export/csv', (_req, res) => {
-    const results = loadResearchResults();
-    const csv = researchResultsToCsv(results);
+    const csv = researchResultsToCsv(loadResearchResults());
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="melo_love_foreign_research_${new Date().toISOString().slice(0, 10)}.csv"`
-    );
+    res.setHeader('Content-Disposition', 'attachment; filename="melo_love_research.csv"');
     res.send(csv);
   });
 
   app.post('/api/research/backup', (_req, res) => {
-    const filename = createResearchBackupSnapshot();
-    res.json({ filename, backups: listResearchBackupSnapshots() });
+    const backup = createResearchBackup();
+    res.json({ backup });
   });
 
-  /* ==========================================================================
-     STAGE 3: STORY GENERATOR + MELO_LOVE VOICE ENGINE API
-     ========================================================================== */
-  registerContentRoutes(app);
+  // ============================================================================
+  // ЭТАП 3: STORY GENERATOR + MELO_LOVE VOICE ENGINE API
+  // ============================================================================
+  app.use('/api/content', createContentRouter());
 
-  // Vite middleware in dev, static dist in production
-  if (process.env.NODE_ENV !== 'production') {
+  // ============================================================================
+  // ЭТАП 4: CONTENT STUDIO + PUBLISHING INFRASTRUCTURE API
+  // ============================================================================
+  app.use('/api/publishing', createPublishingRouter());
+
+  // ============================================================================
+  // ЭТАП 5: AUTONOMOUS RESEARCH, PRODUCTION & PUBLISHING SCHEDULER API
+  // ============================================================================
+  app.use('/api/autonomous', createAutonomousRouter());
+
+  // ============================================================================
+  // VITE / STATIC SERVING
+  // ============================================================================
+  const isProd = process.env.NODE_ENV === 'production';
+  if (!isProd) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -1063,18 +695,20 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distDir = path.resolve(process.cwd(), 'dist');
-    app.use(express.static(distDir));
-    app.get('/{*splat}', (_req, res) => {
-      res.sendFile(path.join(distDir, 'index.html'));
-    });
+    if (fs.existsSync(distDir)) {
+      app.use(express.static(distDir));
+      app.get('*', (_req, res) => {
+        res.sendFile(path.join(distDir, 'index.html'));
+      });
+    }
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`MELO_LOVE server running at http://0.0.0.0:${PORT}`);
+    console.log(`MELO_LOVE server running at http://localhost:${PORT}`);
   });
 }
 
-startServer().catch((err) => {
-  console.error('Fatal server startup error:', err);
+bootstrap().catch((err) => {
+  console.error('Failed to start MELO_LOVE server:', err);
   process.exit(1);
 });

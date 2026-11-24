@@ -847,7 +847,7 @@ export async function runAutonomousProductionCycle(options?: {
       storiesApproved: 0,
       publicationsCreated: 0,
       publishedToTelegram: 0,
-      summary: 'Автогенерация публикаций пропущена: не заданы GEMINI_API_KEY, GIGACHAT_AUTH_KEY и ZAI_API_KEY.',
+      summary: 'Автогенерация публикаций пропущена: не заданы GEMINI_API_KEY и резервный GIGACHAT_AUTH_KEY.',
     };
     state.lastProductionRunAt = finishedAt;
     state.runHistory.unshift(log);

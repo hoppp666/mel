@@ -1,791 +1,479 @@
-import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import {
-  buildContentSemanticFingerprint,
-  calculateContentQualityScore,
-  countWords,
-  extractFirstSentence,
-  extractLastSentence,
-  runDeterministicDraftChecks,
-} from '../src/shared/contentUtils.ts';
-import type {
   ContentDraft,
   ContentLengthPreset,
-  ContentQualityBreakdown,
-  ContentQualityChecks,
-  ContentRevisionSnapshot,
-  NarrativeStructurePattern,
-  PhrasebookEntry,
-  RewriteActionType,
+  ContentQualityScore,
+  ContentRevision,
+  NarrativeStartStyle,
+  RewriteMode,
   StoryPlot,
-  VoiceSliders,
-} from '../src/shared/types.ts';
-import { createRotatedGeminiClient, rotateToNextApiKey } from './geminiKeyRotator.ts';
+} from '../src/shared/types.js';
 import {
-  generateNextContentId,
+  calculateContentQuality,
+  CONTENT_LENGTH_PRESETS,
+  countWords,
+  extractEndingPattern,
+  extractOpeningPattern,
+  sanitizeKramarovskyDashes,
+} from '../src/shared/contentUtils.js';
+import {
+  callChatCompletionJson,
+  formatAiError,
+} from './aiClient.js';
+import {
   loadContentDrafts,
   loadPhrasebook,
   loadVoiceConfig,
-} from './contentStorage.ts';
+  nextContentId,
+  saveContentDrafts,
+  syncStoryUsageStatus,
+} from './contentStorage.js';
 import {
   auditSourceStoryCompleteness,
   buildRecentDiversityContext,
-  buildSourceStoryPromptBlock,
-  buildVoiceSystemInstruction,
-  resolveActiveVoiceSliders,
+  buildVoiceSystemPrompt,
+  selectActivePhrasebookHints,
   selectDiverseNarrativeStructure,
-  selectEligiblePhrasebookHints,
-} from './voiceEngine.ts';
+} from './voiceEngine.js';
+import { loadDatabase } from './storage.js';
 
-const GENERATION_MODEL = 'gemini-4-hydrogen';
-const GENERATION_PROMPT_VERSION = 'v3.0-melo-voice';
+let activeGenerationAbort: AbortController | null = null;
 
-// Concurrency lock & cancellation registry so parallel/duplicate tasks never corrupt state
-const activeTasks = new Map<string, { lockKey: string; controller: AbortController }>();
-const activeLockKeys = new Set<string>();
+export function isContentGenerationRunning(): boolean {
+  return activeGenerationAbort !== null;
+}
 
-export function registerTaskLock(taskId: string | undefined, lockKey: string): AbortController {
-  if (activeLockKeys.has(lockKey)) {
-    throw new Error(`Уже выполняется генерация или редактура для «${lockKey}». Дождитесь завершения или отмените задачу.`);
+export function cancelContentGeneration(): boolean {
+  if (activeGenerationAbort) {
+    activeGenerationAbort.abort();
+    activeGenerationAbort = null;
+    return true;
   }
+  return false;
+}
+
+interface AiDraftPayload {
+  title: string;
+  subtitle: string;
+  body: string;
+  triggerQuestion: string;
+  aiBreakdown?: ContentQualityScore['breakdown'];
+  aiPenalties?: {
+    hasMeaninglessRepetition?: boolean;
+    soundsLikeAiTemplate?: boolean;
+    artificialColloquialism?: boolean;
+    contradictsSource?: boolean;
+    lostImportantDetail?: boolean;
+    artificialEnding?: boolean;
+    unsubstantiatedClaims?: boolean;
+  };
+  aiComment?: string;
+}
+
+async function callAiForDraft(params: {
+  systemInstruction: string;
+  userPrompt: string;
+  signal: AbortSignal;
+}): Promise<AiDraftPayload> {
+  try {
+    const jsonInstruction = `${params.userPrompt}
+
+Верни строго валидный JSON-объект (без пояснений вне JSON) со следующими полями:
+{
+  "title": "строка — цепляющий заголовок без длинных тире",
+  "subtitle": "строка — короткий анонс в 1 предложение",
+  "body": "строка — основной текст публикации с живыми абзацами через \\n\\n, БЕЗ единого длинного тире (—) или среднего тире (–)",
+  "triggerQuestion": "строка — сильный финальный вопрос к читателю",
+  "aiComment": "строка — короткий самоаудит редактора",
+  "aiBreakdown": {
+    "hookStrength": 0..15,
+    "languageNaturalness": 0..15,
+    "emotionalImpact": 0..15,
+    "plotDepth": 0..15,
+    "narrativeUniqueness": 0..15,
+    "voiceRecognition": 0..10,
+    "endingQuality": 0..10,
+    "sourceFidelity": 0..5
+  },
+  "aiPenalties": {
+    "hasMeaninglessRepetition": false,
+    "soundsLikeAiTemplate": false,
+    "artificialColloquialism": false,
+    "contradictsSource": false,
+    "lostImportantDetail": false,
+    "artificialEnding": false,
+    "unsubstantiatedClaims": false
+  }
+}`;
+
+    const parsed = await callChatCompletionJson<AiDraftPayload>({
+      systemInstruction: params.systemInstruction,
+      userPrompt: jsonInstruction,
+      temperature: 0.78,
+      maxTokens: 3200,
+      timeoutMs: 60_000,
+      signal: params.signal,
+    });
+
+    if (!parsed.title || !parsed.body) {
+      throw new Error('Модель вернула неполную структуру публикации.');
+    }
+
+    return {
+      ...parsed,
+      title: sanitizeKramarovskyDashes(String(parsed.title)),
+      subtitle: sanitizeKramarovskyDashes(String(parsed.subtitle || '')),
+      body: sanitizeKramarovskyDashes(String(parsed.body)),
+      triggerQuestion: sanitizeKramarovskyDashes(String(parsed.triggerQuestion || '')),
+    };
+  } catch (err) {
+    throw formatAiError(err);
+  }
+}
+
+function buildStoryFactSheet(story: StoryPlot): string {
+  return `ИСХОДНАЯ СЮЖЕТНАЯ ОСНОВА (${story.id}):
+- Коллекция: ${story.collection} (${story.category} / ${story.subcategory})
+- Участники: ${story.participants}
+- Обстановка: ${story.setting}
+- Сюжет: ${story.fullPlot}
+- Ключевой конфликт/поступок: ${story.coreConflictOrAction}
+- Позиция стороны A: ${story.sideAPosition}
+- Позиция стороны B: ${story.sideBPosition}
+- Эмоциональный механизм: ${story.emotionalMechanism}
+- Скрытое ожидание: ${story.hiddenExpectation}
+- Неожиданный нюанс (ОБЯЗАТЕЛЬНО сохранить): ${story.unexpectedNuance}
+- Возможный поворот: ${story.possibleTwist}
+- Базовый вопрос: ${story.mainTriggerQuestion}
+- Ключевые слова: ${story.keywords.join(', ')}`;
+}
+
+export async function generatePublicationsFromStory(params: {
+  sourceStoryId: string;
+  lengthPreset: ContentLengthPreset;
+  narrativeStyle?: NarrativeStartStyle;
+  variantsCount?: number;
+  voicePresetId?: string;
+}): Promise<ContentDraft[]> {
+  if (activeGenerationAbort) {
+    const err = new Error('Уже выполняется генерация публикации. Дождитесь завершения или отмените.');
+    (err as { status?: number }).status = 409;
+    throw err;
+  }
+
+  const db = loadDatabase();
+  const story = db.stories.find((s) => s.id === params.sourceStoryId);
+  if (!story) {
+    const err = new Error('Исходный сюжет не найден в STORY DATABASE.');
+    (err as { status?: number }).status = 404;
+    throw err;
+  }
+  if (story.verificationStatus !== 'approved') {
+    const err = new Error(
+      `Сюжет ${story.id} имеет статус "${story.verificationStatus}". В генерацию допускаются только подтверждённые (approved) сюжеты.`
+    );
+    (err as { status?: number }).status = 400;
+    throw err;
+  }
+  if (story.usageStatus !== 'unused') {
+    const err = new Error(
+      `Сюжет ${story.id} уже имеет статус использования "${story.usageStatus}". Для генерации выберите свободный (unused) сюжет.`
+    );
+    (err as { status?: number }).status = 409;
+    throw err;
+  }
+
   const controller = new AbortController();
-  const resolvedId = taskId || `TASK-${Date.now().toString(36).toUpperCase()}`;
-  activeLockKeys.add(lockKey);
-  activeTasks.set(resolvedId, { lockKey, controller });
-  return controller;
-}
-
-export function releaseTaskLock(taskId: string | undefined, lockKey: string): void {
-  activeLockKeys.delete(lockKey);
-  if (taskId) {
-    activeTasks.delete(taskId);
-  }
-  for (const [k, v] of activeTasks.entries()) {
-    if (v.lockKey === lockKey) {
-      activeTasks.delete(k);
-    }
-  }
-}
-
-export function cancelContentTask(taskId: string): boolean {
-  const entry = activeTasks.get(taskId);
-  if (!entry) return false;
-  entry.controller.abort(new Error('Операция отменена пользователем.'));
-  return true;
-}
-
-export function getActiveContentTaskIds(): string[] {
-  return Array.from(activeTasks.keys());
-}
-
-function getContentGeminiClient(): GoogleGenAI {
-  return createRotatedGeminiClient({ timeout: 45000 });
-}
-
-async function runGeminiWithGuard<T>(
-  fn: () => Promise<T>,
-  signal?: AbortSignal,
-  maxRetries = 2
-): Promise<T> {
-  if (signal?.aborted) {
-    throw new Error('Генерация отменена пользователем.');
-  }
-
-  let lastErr: unknown;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      return await Promise.race([
-        fn(),
-        new Promise<T>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error('Таймаут ответа Gemini API (46с). Повторите попытку.')),
-            46000
-          );
-          if (signal) {
-            const onAbort = () => reject(new Error('Генерация отменена пользователем.'));
-            if (signal.aborted) onAbort();
-            else signal.addEventListener('abort', onAbort, { once: true });
-          }
-        }),
-      ]);
-    } catch (err) {
-      lastErr = err;
-      const msg = err instanceof Error ? err.message : String(err);
-      if (/RESOURCE_EXHAUSTED|429|quota|503|UNAVAILABLE|high demand/i.test(msg)) {
-        const rotated = rotateToNextApiKey();
-        if (rotated) {
-          // Retry immediately with new rotated key
-          continue;
-        }
-      }
-      if (
-        signal?.aborted ||
-        /отменена|API_KEY_INVALID|PERMISSION_DENIED|NOT_FOUND|Не задан GEMINI_API_KEY/i.test(
-          msg
-        )
-      ) {
-        throw err;
-      }
-      if (attempt < maxRetries) {
-        await new Promise((r) => setTimeout(r, 900 * Math.pow(2, attempt)));
-      }
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  }
-  throw lastErr;
-}
-
-function parseJsonResponse<T>(rawText: string | undefined): T {
-  const cleaned = (rawText ?? '{}')
-    .replace(/^```json\s*/i, '')
-    .replace(/```$/i, '')
-    .trim();
-  return JSON.parse(cleaned) as T;
-}
-
-interface GeneratedArticlePayload {
-  title: string;
-  alternativeTitles: string[];
-  excerpt: string;
-  body: string;
-  mainTriggerQuestion: string;
-  editorialNotes: string;
-}
-
-const ARTICLE_RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    title: { type: Type.STRING },
-    alternativeTitles: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-    },
-    excerpt: { type: Type.STRING },
-    body: { type: Type.STRING },
-    mainTriggerQuestion: { type: Type.STRING },
-    editorialNotes: { type: Type.STRING },
-  },
-  required: [
-    'title',
-    'alternativeTitles',
-    'excerpt',
-    'body',
-    'mainTriggerQuestion',
-    'editorialNotes',
-  ],
-};
-
-const QUALITY_RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    hookStrength: { type: Type.INTEGER },
-    languageNaturalness: { type: Type.INTEGER },
-    emotionalImpact: { type: Type.INTEGER },
-    plotDepth: { type: Type.INTEGER },
-    narrativeUniqueness: { type: Type.INTEGER },
-    voiceRecognition: { type: Type.INTEGER },
-    endingQuality: { type: Type.INTEGER },
-    sourceFidelity: { type: Type.INTEGER },
-    soundsLikeAiTemplate: { type: Type.BOOLEAN },
-    hasMeaninglessRepetition: { type: Type.BOOLEAN },
-    artificialColloquialism: { type: Type.BOOLEAN },
-    contradictsSource: { type: Type.BOOLEAN },
-    lostImportantDetail: { type: Type.BOOLEAN },
-    artificialEnding: { type: Type.BOOLEAN },
-    unsubstantiatedClaims: { type: Type.BOOLEAN },
-    editorialNotes: { type: Type.STRING },
-  },
-  required: [
-    'hookStrength',
-    'languageNaturalness',
-    'emotionalImpact',
-    'plotDepth',
-    'narrativeUniqueness',
-    'voiceRecognition',
-    'endingQuality',
-    'sourceFidelity',
-    'soundsLikeAiTemplate',
-    'hasMeaninglessRepetition',
-    'artificialColloquialism',
-    'contradictsSource',
-    'lostImportantDetail',
-    'artificialEnding',
-    'unsubstantiatedClaims',
-    'editorialNotes',
-  ],
-};
-
-export async function runContentQualityControl(params: {
-  title: string;
-  excerpt: string;
-  body: string;
-  mainTriggerQuestion: string;
-  sourceStory: StoryPlot;
-  recentDrafts: ContentDraft[];
-  phrasebook: PhrasebookEntry[];
-  excludeDraftId?: string;
-  signal?: AbortSignal;
-}): Promise<{
-  qualityBreakdown: ContentQualityBreakdown;
-  usedPhrases: string[];
-  openingPattern: string;
-  endingPattern: string;
-}> {
-  const {
-    title,
-    excerpt,
-    body,
-    mainTriggerQuestion,
-    sourceStory,
-    recentDrafts,
-    phrasebook,
-    excludeDraftId,
-    signal,
-  } = params;
-
-  const det = runDeterministicDraftChecks({
-    title,
-    body,
-    mainTriggerQuestion,
-    collection: sourceStory.collection,
-    sourceStory,
-    recentDrafts,
-    phrasebook,
-    excludeDraftId,
-  });
-
-  const ai = getContentGeminiClient();
-  const auditPrompt = `Ты — строгий шеф-редактор MELO_LOVE. Оцени черновик публикации по 8 критериям (НЕ завышай оценки, не ставь 95–100 автоматически, честно отмечай любую искусственность, сухость, потерю нюансов или AI-интонацию).
-
-МАКСИМАЛЬНЫЕ БАЛЛЫ ПО КРИТЕРИЯМ:
-- hookStrength (Сила начала и интерес): 0..15
-- languageNaturalness (Естественность русского языка): 0..15
-- emotionalImpact (Эмоциональное воздействие): 0..15
-- plotDepth (Раскрытие сюжета): 0..15
-- narrativeUniqueness (Уникальность повествования): 0..15
-- voiceRecognition (Узнаваемость стиля MELO_LOVE): 0..10
-- endingQuality (Качество финала): 0..10
-- sourceFidelity (Соответствие исходному сюжету): 0..5
-
-ИСХОДНЫЙ СЮЖЕТ:
-${buildSourceStoryPromptBlock(sourceStory)}
-
-ПРОВЕРЯЕМАЯ ПУБЛИКАЦИЯ:
-Заголовок: ${title}
-Анонс: ${excerpt}
-Текст (${countWords(body)} слов):
-${body}
-Финальный вопрос: ${mainTriggerQuestion}
-
-АВТОМАТИЧЕСКИЕ ПРЕДУПРЕЖДЕНИЯ ДИСПЕТЧЕРА:
-${det.warnings.length > 0 ? det.warnings.join('\n') : 'Автоматических нарушений шаблонов не выявлено.'}`;
-
-  const resp = await runGeminiWithGuard(
-    () =>
-      ai.models.generateContent({
-        model: GENERATION_MODEL,
-        contents: auditPrompt,
-        config: {
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-          responseMimeType: 'application/json',
-          responseSchema: QUALITY_RESPONSE_SCHEMA,
-        },
-      }),
-    signal
-  );
-
-  const aiRaw = parseJsonResponse<Record<string, unknown>>(resp.text);
-
-  const checks: ContentQualityChecks = {
-    hasMeaninglessRepetition:
-      Boolean(aiRaw.hasMeaninglessRepetition) ||
-      Boolean(det.repeatedOpeningId) ||
-      Boolean(det.repeatedEndingId),
-    soundsLikeAiTemplate:
-      Boolean(aiRaw.soundsLikeAiTemplate) || det.hasBannedOpening || det.hasRomanticCliche,
-    artificialColloquialism: Boolean(aiRaw.artificialColloquialism),
-    phraseOveruse:
-      det.overusedPhrases.length > 0 ||
-      det.bannedPhrasesUsed.length > 0 ||
-      det.usedPhrases.length > 2,
-    contradictsSource: Boolean(aiRaw.contradictsSource),
-    lostImportantDetail: Boolean(aiRaw.lostImportantDetail),
-    artificialEnding: Boolean(aiRaw.artificialEnding),
-    unsubstantiatedClaims: Boolean(aiRaw.unsubstantiatedClaims),
-    verbatimCopy: det.verbatimOverlapRatio >= 0.85,
-  };
-
-  const scored = calculateContentQualityScore(
-    {
-      hookStrength: Number(aiRaw.hookStrength),
-      languageNaturalness: Number(aiRaw.languageNaturalness),
-      emotionalImpact: Number(aiRaw.emotionalImpact),
-      plotDepth: Number(aiRaw.plotDepth),
-      narrativeUniqueness: Number(aiRaw.narrativeUniqueness),
-      voiceRecognition: Number(aiRaw.voiceRecognition),
-      endingQuality: Number(aiRaw.endingQuality),
-      sourceFidelity: Number(aiRaw.sourceFidelity),
-    },
-    checks
-  );
-
-  const warnings = [...det.warnings];
-  if (checks.contradictsSource) warnings.push('Есть противоречие деталям исходного сюжета.');
-  if (checks.lostImportantDetail) warnings.push('Упущен важный нюанс или поворот исходного сюжета.');
-  if (checks.soundsLikeAiTemplate) warnings.push('Обнаружена шаблонная AI-интонация.');
-  if (checks.artificialEnding) warnings.push('Финал выглядит искусственным или надуманным.');
-  if (checks.unsubstantiatedClaims) warnings.push('Обнаружены необоснованные домыслы вне логики сюжета.');
-
-  const editorialNotes = String(
-    aiRaw.editorialNotes || 'Редакторская проверка качества выполнена.'
-  );
-
-  return {
-    qualityBreakdown: {
-      ...scored,
-      checks,
-      warnings: Array.from(new Set(warnings)),
-      editorialNotes,
-    },
-    usedPhrases: det.usedPhrases,
-    openingPattern: det.openingPattern,
-    endingPattern: det.endingPattern,
-  };
-}
-
-export interface GeneratePublicationParams {
-  story: StoryPlot;
-  voiceProfileId?: string;
-  voiceSlidersOverride?: Partial<VoiceSliders>;
-  lengthPreset?: ContentLengthPreset;
-  narrativeStructure?: NarrativeStructurePattern | 'auto';
-  variantIndex?: number;
-  variantAngleNote?: string;
-  taskId?: string;
-}
-
-export async function generatePublicationCandidate(
-  params: GeneratePublicationParams
-): Promise<Omit<ContentDraft, 'id' | 'createdAt' | 'updatedAt' | 'revisionHistory'>> {
-  const { story, lengthPreset = 'standard', variantIndex = 0, variantAngleNote, taskId } = params;
-  const lockKey = `story:${story.id}`;
-  const controller = registerTaskLock(taskId, lockKey);
+  activeGenerationAbort = controller;
 
   try {
-    // Audit source completeness honestly (Section 3)
-    const audit = auditSourceStoryCompleteness(story);
-
+    const drafts = loadContentDrafts();
     const voiceConfig = loadVoiceConfig();
-    const allDrafts = loadContentDrafts();
     const phrasebook = loadPhrasebook();
 
-    const { profileId, profileName, sliders } = resolveActiveVoiceSliders(
-      voiceConfig,
-      story,
-      params.voiceProfileId,
-      params.voiceSlidersOverride
-    );
+    const presetId = params.voicePresetId || voiceConfig.activePresetId;
+    const profile =
+      story.collection === 'debate' ? voiceConfig.debate : voiceConfig.romantic;
+    const completeness = auditSourceStoryCompleteness(story);
+    const variantsCount = Math.max(1, Math.min(3, params.variantsCount || 1));
+    const variantGroupId = variantsCount > 1 ? `VAR-${Date.now().toString(36).toUpperCase()}` : undefined;
 
-    const chosenStructure = selectDiverseNarrativeStructure(
-      params.narrativeStructure,
-      allDrafts,
-      variantIndex
-    );
+    const bannedPhrases = phrasebook
+      .filter((p) => p.banned || p.recentUsageCount >= p.maxFrequencyPer10)
+      .map((p) => p.phrase);
 
-    const phraseHints = selectEligiblePhrasebookHints(story, sliders, phrasebook);
-    const diversityContext = buildRecentDiversityContext(allDrafts);
+    const created: ContentDraft[] = [];
+    const recentPool = [...drafts];
 
-    const systemInstruction = buildVoiceSystemInstruction({
-      story,
-      sliders,
-      profileName,
-      lengthPreset,
-      narrativeStructure: chosenStructure,
-      phraseHints,
-    });
-
-    const userPrompt = `${buildSourceStoryPromptBlock(story)}
-
-КОНТЕКСТ ПОСЛЕДНИХ ПУБЛИКАЦИЙ (НЕ ПОВТОРЯТЬ ИХ НАЧАЛА, КОНЦОВКИ И РИТМ):
-${diversityContext}
-${variantAngleNote ? `\nСПЕЦИАЛЬНАЯ ЗАДАЧА ВАРИАНТА #${variantIndex + 1}: ${variantAngleNote}` : ''}
-${!audit.sufficient ? `\nВНИМАНИЕ К ИСХОДНИКУ: ${audit.warningNote}` : ''}
-
-Сгенерируй цельную публикацию в JSON:
-- title: основной заголовок
-- alternativeTitles: ровно 2 разных альтернативных заголовка
-- excerpt: живой анонс на 1–2 предложения
-- body: текст публикации (без заголовка внутри текста, без Markdown-решёток)
-- mainTriggerQuestion: финальный вопрос (или мягкий эмоциональный финальный штрих для романтики)
-- editorialNotes: короткое авторское примечание, какая интонация и нюанс использованы`;
-
-    const ai = getContentGeminiClient();
-    const genResp = await runGeminiWithGuard(
-      () =>
-        ai.models.generateContent({
-          model: GENERATION_MODEL,
-          contents: userPrompt,
-          config: {
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            systemInstruction,
-            responseMimeType: 'application/json',
-            responseSchema: ARTICLE_RESPONSE_SCHEMA,
-          },
-        }),
-      controller.signal
-    );
-
-    let article = parseJsonResponse<GeneratedArticlePayload>(genResp.text);
-
-    // Stage 6-7: Run objective + AI quality check
-    let qc = await runContentQualityControl({
-      title: article.title,
-      excerpt: article.excerpt,
-      body: article.body,
-      mainTriggerQuestion: article.mainTriggerQuestion,
-      sourceStory: story,
-      recentDrafts: allDrafts,
-      phrasebook,
-      signal: controller.signal,
-    });
-
-    // Stage 8: One targeted corrective pass if score < 85 (never infinite loop)
-    if (qc.qualityBreakdown.overall < 85 && !controller.signal.aborted) {
-      const fixPrompt = `Твоя предыдущая версия публикации набрала ${qc.qualityBreakdown.overall}/100 (требуется >= 85).
-Замечания шеф-редактора:
-- ${qc.qualityBreakdown.editorialNotes}
-${qc.qualityBreakdown.warnings.map((w) => `- ${w}`).join('\n')}
-
-ПРЕДЫДУЩИЙ ВАРИАНТ:
-Заголовок: ${article.title}
-Текст:
-${article.body}
-Финал: ${article.mainTriggerQuestion}
-
-Исправь указанные недостатки, сохранив верность исходному сюжету (${story.id}) и живой голос MELO_LOVE. Верни обновлённый JSON.`;
-
-      const fixResp = await runGeminiWithGuard(
-        () =>
-          ai.models.generateContent({
-            model: GENERATION_MODEL,
-            contents: fixPrompt,
-            config: {
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-              systemInstruction,
-              responseMimeType: 'application/json',
-              responseSchema: ARTICLE_RESPONSE_SCHEMA,
-            },
-          }),
-        controller.signal
+    for (let v = 0; v < variantsCount; v++) {
+      const style = selectDiverseNarrativeStructure(
+        recentPool,
+        v === 0 ? params.narrativeStyle : undefined
       );
+      const phraseHints = selectActivePhrasebookHints(phrasebook, story.collection);
+      const systemInstruction = buildVoiceSystemPrompt({
+        collection: story.collection,
+        profile,
+        narrativeStyle: style,
+        lengthPreset: params.lengthPreset || 'standard',
+        phraseHints,
+        bannedPhrases,
+      });
 
-      const improved = parseJsonResponse<GeneratedArticlePayload>(fixResp.text);
-      const improvedQc = await runContentQualityControl({
-        title: improved.title,
-        excerpt: improved.excerpt,
-        body: improved.body,
-        mainTriggerQuestion: improved.mainTriggerQuestion,
-        sourceStory: story,
-        recentDrafts: allDrafts,
-        phrasebook,
+      const diversityContext = buildRecentDiversityContext(recentPool);
+      const lengthMeta = CONTENT_LENGTH_PRESETS[params.lengthPreset || 'standard'];
+
+      const userPrompt = `${buildStoryFactSheet(story)}
+
+Последние 35 публикаций (НЕ повторяй зачины, заголовки и финальные обороты):
+${diversityContext}
+
+${
+  variantsCount > 1
+    ? `Это вариант #${v + 1} из ${variantsCount}. Используй принципиально другой угол подачи и зачин (${style}).`
+    : ''
+}
+Напиши живую публикацию объёмом ${lengthMeta.minWords}–${lengthMeta.maxWords} слов, оцени её по рубрике (hookStrength 0-15, languageNaturalness 0-15, emotionalImpact 0-15, plotDepth 0-15, narrativeUniqueness 0-15, voiceRecognition 0-10, endingQuality 0-10, sourceFidelity 0-5) и верни JSON.`;
+
+      let payload = await callAiForDraft({
+        systemInstruction,
+        userPrompt,
         signal: controller.signal,
       });
 
-      if (improvedQc.qualityBreakdown.overall >= qc.qualityBreakdown.overall) {
-        article = improved;
-        qc = improvedQc;
+      let quality = calculateContentQuality({
+        collection: story.collection,
+        title: payload.title,
+        body: payload.body,
+        triggerQuestion: payload.triggerQuestion,
+        sourceStory: story,
+        recentDrafts: recentPool,
+        phrasebook,
+        minScore: voiceConfig.minPublishQualityScore,
+        aiBreakdown: payload.aiBreakdown,
+        aiPenalties: payload.aiPenalties,
+        aiComment: payload.aiComment,
+      });
+
+      let autoRefined = false;
+      if (quality.overall < voiceConfig.minPublishQualityScore && !controller.signal.aborted) {
+        // Single targeted refinement pass
+        const refinePrompt = `Доработай публикацию так, чтобы итоговый балл качества стал >= ${voiceConfig.minPublishQualityScore}/100.
+Обнаруженные замечания: ${quality.penalties.details.join('; ') || quality.editorialComment}.
+Исходный текст:
+Заголовок: ${payload.title}
+Текст: ${payload.body}
+Вопрос: ${payload.triggerQuestion}
+
+${buildStoryFactSheet(story)}
+Убери любые клише, перефразируй зачин и сохрани все важные детали.`;
+
+        const refinedPayload = await callAiForDraft({
+          systemInstruction,
+          userPrompt: refinePrompt,
+          signal: controller.signal,
+        });
+
+        const refinedQuality = calculateContentQuality({
+          collection: story.collection,
+          title: refinedPayload.title,
+          body: refinedPayload.body,
+          triggerQuestion: refinedPayload.triggerQuestion,
+          sourceStory: story,
+          recentDrafts: recentPool,
+          phrasebook,
+          minScore: voiceConfig.minPublishQualityScore,
+          aiBreakdown: refinedPayload.aiBreakdown,
+          aiPenalties: refinedPayload.aiPenalties,
+          aiComment: refinedPayload.aiComment,
+        });
+
+        if (refinedQuality.overall >= quality.overall) {
+          payload = refinedPayload;
+          quality = refinedQuality;
+          autoRefined = true;
+        }
       }
+
+      const fullText = `${payload.title}\n${payload.body}\n${payload.triggerQuestion}`.toLowerCase();
+      const matchedPhrases = phrasebook.filter((p) =>
+        fullText.includes(p.phrase.toLowerCase())
+      );
+
+      const now = new Date().toISOString();
+      const contentId = nextContentId([...created, ...drafts], story.collection);
+      const draft: ContentDraft = {
+        contentId,
+        sourceStoryId: story.id,
+        collection: story.collection,
+        category: story.category,
+        subcategory: story.subcategory,
+        title: payload.title.trim(),
+        subtitle: (payload.subtitle || '').trim(),
+        body: payload.body.trim(),
+        triggerQuestion: payload.triggerQuestion.trim(),
+        wordCount: countWords(payload.body),
+        lengthPreset: params.lengthPreset || 'standard',
+        narrativeStyle: style,
+        voicePresetId: presetId,
+        usedPhraseIds: matchedPhrases.map((p) => p.id),
+        usedPhrases: matchedPhrases.map((p) => p.phrase),
+        openingPattern: extractOpeningPattern(payload.body),
+        endingPattern: extractEndingPattern(payload.body),
+        status: quality.overall >= voiceConfig.minPublishQualityScore ? 'ready_for_review' : 'needs_revision',
+        quality,
+        autoRefined,
+        completenessAuditNote: completeness.note,
+        variantGroupId,
+        variantIndex: variantsCount > 1 ? v + 1 : undefined,
+        researchId: story.researchId,
+        sourceUrl: story.sourceUrl || undefined,
+        originType: story.originType,
+        revisionHistory: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      created.push(draft);
+      recentPool.unshift(draft);
     }
 
-    const extraNotes = [
-      audit.warningNote,
-      article.editorialNotes,
-      qc.qualityBreakdown.editorialNotes,
-    ]
-      .filter(Boolean)
-      .join('\n');
+    const updatedAll = [...created, ...drafts];
+    saveContentDrafts(updatedAll);
+    syncStoryUsageStatus(story.id);
 
-    const qualityScore = qc.qualityBreakdown.overall;
-    const status = qualityScore >= 85 ? 'ready_for_review' : 'needs_revision';
-
-    return {
-      sourceStoryId: story.id,
-      collection: story.collection,
-      category: story.category,
-      subcategory: story.subcategory,
-      title: String(article.title || story.title).trim(),
-      alternativeTitles: Array.isArray(article.alternativeTitles)
-        ? article.alternativeTitles.map(String).slice(0, 2)
-        : [],
-      excerpt: String(article.excerpt || story.shortDescription).trim(),
-      body: String(article.body || '').trim(),
-      mainTriggerQuestion: String(
-        article.mainTriggerQuestion || story.mainTriggerQuestion
-      ).trim(),
-      voiceProfile: profileId,
-      voiceSettings: sliders,
-      narrativeStructure: chosenStructure,
-      contentLength: countWords(article.body || ''),
-      lengthPreset,
-      qualityScore,
-      qualityBreakdown: qc.qualityBreakdown,
-      editorialNotes: extraNotes,
-      generationModel: GENERATION_MODEL,
-      generationPromptVersion: GENERATION_PROMPT_VERSION,
-      status,
-      sourceUrl: story.sourceUrl || '',
-      researchId: story.researchId,
-      sourceOriginType: story.originType,
-      keywords: story.keywords || [],
-      usedPhrases: qc.usedPhrases,
-      openingPattern: qc.openingPattern || extractFirstSentence(article.body || ''),
-      endingPattern:
-        qc.endingPattern || extractLastSentence(article.mainTriggerQuestion || article.body || ''),
-      semanticFingerprint: buildContentSemanticFingerprint(
-        story.collection,
-        story.category,
-        article.title || story.title,
-        article.body || '',
-        story.keywords || []
-      ),
-      variantIndex,
-    };
+    return created;
   } finally {
-    releaseTaskLock(taskId, lockKey);
+    activeGenerationAbort = null;
   }
 }
 
-export async function generateVariantsCandidates(params: {
-  story: StoryPlot;
-  count?: number;
-  voiceProfileId?: string;
-  voiceSlidersOverride?: Partial<VoiceSliders>;
-  lengthPreset?: ContentLengthPreset;
-  taskId?: string;
-}): Promise<Array<Omit<ContentDraft, 'id' | 'createdAt' | 'updatedAt' | 'revisionHistory'>>> {
-  const existingForStory = loadContentDrafts().filter(
-    (d) => d.sourceStoryId === params.story.id && d.status !== 'rejected'
-  );
-  const remainingSlots = Math.max(0, 3 - existingForStory.length);
-  if (remainingSlots === 0) {
-    throw new Error(
-      `Для сюжета ${params.story.id} уже создано максимальное количество вариантов (3).`
-    );
+const REWRITE_MODE_INSTRUCTIONS: Record<RewriteMode, string> = {
+  more_lively: 'Сделай сцену живее: добавь ритм, конкретный жест или взгляд, убери канцелярит.',
+  more_conversational: 'Перепиши более разговорным, тёплым человеческим языком без грубого сленга.',
+  sharpen_hook: 'Полностью перепиши первый абзац и заголовок, чтобы зацепить с первой секунды.',
+  softer_romantic: 'Смягчи подачу, убери резкость и сфокусируйся на бережной эмоциональной детали.',
+  sharper_debate: 'Усиль аргументацию обеих сторон и остроту противоречия, чтобы читатели спорили в комментариях.',
+  shorten: 'Сократи объём примерно на 30%, оставив только самую сильную конкретику.',
+  expand: 'Расширь текст на 30% за счёт атмосферы, диалога и внутренней мотивации героев.',
+  change_opening: 'Полностью смени угол входа в историю и первый абзац.',
+  change_ending: 'Перепиши финал и триггерный вопрос так, чтобы оставить сильное послевкусие.',
+  remove_ai_feel: 'Вычисти все ровные нейросетевые связки, штампы и подытоживания, оставь живую речь.',
+};
+
+export async function rewriteExistingDraft(
+  contentId: string,
+  mode: RewriteMode
+): Promise<ContentDraft> {
+  if (activeGenerationAbort) {
+    const err = new Error('Уже выполняется генерация. Подождите или отмените текущую задачу.');
+    (err as { status?: number }).status = 409;
+    throw err;
   }
 
-  const targetCount = Math.max(1, Math.min(remainingSlots, Number(params.count || 3)));
-  const allDrafts = loadContentDrafts();
-
-  // Select distinctly different structures and storytelling angles for each variant
-  const angleConfigs: Array<{ structure: NarrativeStructurePattern; angleNote: string }> = [
-    {
-      structure: selectDiverseNarrativeStructure('auto', allDrafts, 0),
-      angleNote: 'Сделай акцент на поступке и скрытой бытовой механике; динамичный разговорный старт.',
-    },
-    {
-      structure: 'contradiction_start',
-      angleNote:
-        'Построй рассказ вокруг контраста между словами героев и реальными последствиями; иной темп и зачин.',
-    },
-    {
-      structure: params.story.collection === 'debate' ? 'outcome_first' : 'detail_start',
-      angleNote:
-        params.story.collection === 'debate'
-          ? 'Начни с итога конфликта, а затем раскрути причины и неожиданную деталь в обратном порядке.'
-          : 'Начни с конкретной тихой предметной детали сцены и подай историю камерно и тепло.',
-    },
-  ];
-
-  const results: Array<Omit<ContentDraft, 'id' | 'createdAt' | 'updatedAt' | 'revisionHistory'>> = [];
-
-  for (let i = 0; i < targetCount; i++) {
-    const cfg = angleConfigs[i % angleConfigs.length];
-    const usedOpeningNotes =
-      results.length > 0
-        ? `\nУЖЕ СОЗДАННЫЕ ВАРИАНТЫ ЭТОГО СЮЖЕТА (НЕ ПОВТОРЯЙ ИХ НАЧАЛА И ФОРМУЛИРОВКИ):\n${results
-            .map((r, idx) => `${idx + 1}) «${r.title}» — старт: «${r.openingPattern}»`)
-            .join('\n')}`
-        : '';
-
-    const candidate = await generatePublicationCandidate({
-      story: params.story,
-      voiceProfileId: params.voiceProfileId,
-      voiceSlidersOverride: params.voiceSlidersOverride,
-      lengthPreset: params.lengthPreset || 'standard',
-      narrativeStructure: cfg.structure,
-      variantIndex: existingForStory.length + i,
-      variantAngleNote: `${cfg.angleNote}${usedOpeningNotes}`,
-      taskId: params.taskId ? `${params.taskId}-v${i + 1}` : undefined,
-    });
-    results.push(candidate);
+  const drafts = loadContentDrafts();
+  const idx = drafts.findIndex((d) => d.contentId === contentId);
+  if (idx === -1) {
+    const err = new Error('Черновик не найден');
+    (err as { status?: number }).status = 404;
+    throw err;
   }
 
-  return results;
-}
+  const current = drafts[idx];
+  const db = loadDatabase();
+  const story = db.stories.find((s) => s.id === current.sourceStoryId);
+  if (!story) {
+    const err = new Error('Исходный сюжет для черновика не найден');
+    (err as { status?: number }).status = 404;
+    throw err;
+  }
 
-export async function rewriteDraftContent(params: {
-  draft: ContentDraft;
-  story: StoryPlot;
-  action: RewriteActionType;
-  customInstruction?: string;
-  taskId?: string;
-}): Promise<{
-  title: string;
-  alternativeTitles: string[];
-  excerpt: string;
-  body: string;
-  mainTriggerQuestion: string;
-  qualityBreakdown: ContentQualityBreakdown;
-  usedPhrases: string[];
-  openingPattern: string;
-  endingPattern: string;
-  editorialNotes: string;
-  snapshotToAppend: ContentRevisionSnapshot;
-}> {
-  const { draft, story, action, customInstruction, taskId } = params;
-  const lockKey = `draft:${draft.id}`;
-  const controller = registerTaskLock(taskId, lockKey);
-
-  const actionPrompts: Record<RewriteActionType, string> = {
-    rewrite_opening:
-      'Перепиши ТОЛЬКО зачин (первые 1–3 предложения) и первый абзац: сделай начало свежим, цепляющим, без штампов, сохранив остальную часть текста.',
-    rewrite_ending:
-      'Перепиши ТОЛЬКО финал и финальный вопрос (mainTriggerQuestion), сделав развязку живой, точной и вызывающей отклик, не ломая начало и середину текста.',
-    more_ironic:
-      'Перепиши текст с большей умной иронией и наблюдательностью к несоответствию слов и поступков (без грубого сарказма и оскорблений).',
-    more_emotional:
-      'Усиль эмоциональное проживание сцены через конкретные жесты, паузы и детали, не скатываясь в пафос и открытки.',
-    less_pathos:
-      'Убери лишний пафос, громкие обобщения и морализаторство — сделай тон приземлённее, живее и естественнее.',
-    simpler:
-      'Упрости язык: убери тяжёлые канцеляризмы, сложные причастные обороты и искусственные речевые конструкции, сохранив смысл.',
-    more_natural:
-      'Сделай повествование максимально похожим на живую человеческую речь интересного рассказчика, убери любую "нейросетевую" гладкость.',
-    shorter:
-      'Сократи текст примерно на 30–40%, оставив самую суть, острые детали и концовку без потери нюансов сюжета.',
-    longer:
-      'Расширь текст примерно на 30–40%, глубже раскрыв мотивацию сторон, обстановку и психологический механизм из исходного сюжета (без воды).',
-    custom: customInstruction?.trim() || 'Улучши текст согласно комментарию редактора.',
-  };
+  const controller = new AbortController();
+  activeGenerationAbort = controller;
 
   try {
     const voiceConfig = loadVoiceConfig();
-    const allDrafts = loadContentDrafts();
     const phrasebook = loadPhrasebook();
-    const { profileName, sliders } = resolveActiveVoiceSliders(
-      voiceConfig,
-      story,
-      draft.voiceProfile,
-      draft.voiceSettings
-    );
+    const profile = current.collection === 'debate' ? voiceConfig.debate : voiceConfig.romantic;
+    const phraseHints = selectActivePhrasebookHints(phrasebook, current.collection);
+    const bannedPhrases = phrasebook
+      .filter((p) => p.banned || p.recentUsageCount >= p.maxFrequencyPer10)
+      .map((p) => p.phrase);
 
-    const phraseHints = selectEligiblePhrasebookHints(story, sliders, phrasebook);
-    const systemInstruction = buildVoiceSystemInstruction({
-      story,
-      sliders,
-      profileName,
-      lengthPreset: draft.lengthPreset,
-      narrativeStructure: draft.narrativeStructure,
+    const systemInstruction = buildVoiceSystemPrompt({
+      collection: current.collection,
+      profile,
+      narrativeStyle: current.narrativeStyle,
+      lengthPreset: current.lengthPreset,
       phraseHints,
+      bannedPhrases,
     });
 
-    const prompt = `${buildSourceStoryPromptBlock(story)}
+    const userPrompt = `Режим переписывания: ${REWRITE_MODE_INSTRUCTIONS[mode]}
 
-ТЕКУЩАЯ ВЕРСИЯ ПУБЛИКАЦИИ [${draft.id}]:
-Заголовок: ${draft.title}
-Альтернативные заголовки: ${(draft.alternativeTitles || []).join(' | ')}
-Анонс: ${draft.excerpt}
-Текст:
-${draft.body}
-Финальный вопрос: ${draft.mainTriggerQuestion}
+Текущий черновик (${current.contentId}):
+Заголовок: ${current.title}
+Подзаголовок: ${current.subtitle}
+Текст: ${current.body}
+Вопрос: ${current.triggerQuestion}
 
-ЗАДАЧА РЕДАКТУРЫ (${action}):
-${actionPrompts[action]}
-${customInstruction && action !== 'custom' ? `Дополнительное пожелание редактора: ${customInstruction}` : ''}
+${buildStoryFactSheet(story)}
 
-Верни обновлённую публикацию в JSON.`;
+Сохрани верность фактам исходного сюжета и верни обновлённый JSON с оценкой качества.`;
 
-    const ai = getContentGeminiClient();
-    const resp = await runGeminiWithGuard(
-      () =>
-        ai.models.generateContent({
-          model: GENERATION_MODEL,
-          contents: prompt,
-          config: {
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            systemInstruction,
-            responseMimeType: 'application/json',
-            responseSchema: ARTICLE_RESPONSE_SCHEMA,
-          },
-        }),
-      controller.signal
-    );
-
-    const parsed = parseJsonResponse<GeneratedArticlePayload>(resp.text);
-    const qc = await runContentQualityControl({
-      title: parsed.title || draft.title,
-      excerpt: parsed.excerpt || draft.excerpt,
-      body: parsed.body || draft.body,
-      mainTriggerQuestion: parsed.mainTriggerQuestion || draft.mainTriggerQuestion,
-      sourceStory: story,
-      recentDrafts: allDrafts,
-      phrasebook,
-      excludeDraftId: draft.id,
+    const payload = await callAiForDraft({
+      systemInstruction,
+      userPrompt,
       signal: controller.signal,
     });
 
-    const nextVersionNumber = (draft.revisionHistory?.length || 0) + 1;
-    const snapshotToAppend: ContentRevisionSnapshot = {
-      versionId: `REV-${nextVersionNumber}-${Date.now().toString(36).toUpperCase()}`,
-      versionNumber: nextVersionNumber,
-      createdAt: new Date().toISOString(),
-      actionLabel: `Перед: ${action}`,
-      title: draft.title,
-      alternativeTitles: draft.alternativeTitles || [],
-      excerpt: draft.excerpt,
-      body: draft.body,
-      mainTriggerQuestion: draft.mainTriggerQuestion,
-      voiceProfile: draft.voiceProfile,
-      voiceSettings: draft.voiceSettings,
-      narrativeStructure: draft.narrativeStructure,
-      lengthPreset: draft.lengthPreset,
-      qualityScore: draft.qualityScore,
-      qualityBreakdown: draft.qualityBreakdown,
-      editorialNotes: draft.editorialNotes,
+    const quality = calculateContentQuality({
+      collection: current.collection,
+      title: payload.title,
+      body: payload.body,
+      triggerQuestion: payload.triggerQuestion,
+      sourceStory: story,
+      recentDrafts: drafts.filter((d) => d.contentId !== current.contentId),
+      phrasebook,
+      minScore: voiceConfig.minPublishQualityScore,
+      aiBreakdown: payload.aiBreakdown,
+      aiPenalties: payload.aiPenalties,
+      aiComment: payload.aiComment,
+    });
+
+    const snapshot: ContentRevision = {
+      version: current.revisionHistory.length + 1,
+      title: current.title,
+      body: current.body,
+      triggerQuestion: current.triggerQuestion,
+      qualityScore: current.quality.overall,
+      reason: `До AI-переписывания (${mode})`,
+      createdAt: current.updatedAt,
     };
 
-    return {
-      title: String(parsed.title || draft.title).trim(),
-      alternativeTitles: Array.isArray(parsed.alternativeTitles)
-        ? parsed.alternativeTitles.map(String).slice(0, 2)
-        : draft.alternativeTitles,
-      excerpt: String(parsed.excerpt || draft.excerpt).trim(),
-      body: String(parsed.body || draft.body).trim(),
-      mainTriggerQuestion: String(parsed.mainTriggerQuestion || draft.mainTriggerQuestion).trim(),
-      qualityBreakdown: qc.qualityBreakdown,
-      usedPhrases: qc.usedPhrases,
-      openingPattern: qc.openingPattern,
-      endingPattern: qc.endingPattern,
-      editorialNotes: `${String(parsed.editorialNotes || '').trim()}\n${qc.qualityBreakdown.editorialNotes}`.trim(),
-      snapshotToAppend,
+    const fullText = `${payload.title}\n${payload.body}\n${payload.triggerQuestion}`.toLowerCase();
+    const matchedPhrases = phrasebook.filter((p) => fullText.includes(p.phrase.toLowerCase()));
+
+    const updated: ContentDraft = {
+      ...current,
+      title: payload.title.trim(),
+      subtitle: (payload.subtitle || current.subtitle).trim(),
+      body: payload.body.trim(),
+      triggerQuestion: payload.triggerQuestion.trim(),
+      wordCount: countWords(payload.body),
+      openingPattern: extractOpeningPattern(payload.body),
+      endingPattern: extractEndingPattern(payload.body),
+      usedPhraseIds: matchedPhrases.map((p) => p.id),
+      usedPhrases: matchedPhrases.map((p) => p.phrase),
+      quality,
+      status: quality.overall >= voiceConfig.minPublishQualityScore ? 'ready_for_review' : 'needs_revision',
+      revisionHistory: [snapshot, ...current.revisionHistory].slice(0, 20),
+      updatedAt: new Date().toISOString(),
     };
+
+    drafts[idx] = updated;
+    saveContentDrafts(drafts);
+    return updated;
   } finally {
-    releaseTaskLock(taskId, lockKey);
+    activeGenerationAbort = null;
   }
-}
-
-export function buildDraftRecordFromCandidate(
-  candidate: Omit<ContentDraft, 'id' | 'createdAt' | 'updatedAt' | 'revisionHistory'>,
-  existingDrafts: ContentDraft[]
-): ContentDraft {
-  const now = new Date().toISOString();
-  const id = generateNextContentId(existingDrafts, candidate.collection);
-  return {
-    ...candidate,
-    id,
-    createdAt: now,
-    updatedAt: now,
-    revisionHistory: [],
-  };
 }

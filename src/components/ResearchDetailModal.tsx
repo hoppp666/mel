@@ -1,726 +1,416 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   AlertTriangle,
   Check,
   ExternalLink,
+  Loader2,
   RefreshCw,
-  ShieldCheck,
+  ShieldAlert,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react';
-import { getCategoriesForCollection, PLOT_MECHANICS } from '../shared/categories.ts';
-import type {
-  ResearchDuplicateMatch,
-  ResearchIdeaDraft,
-  ResearchQueueStatus,
-  ResearchResult,
-} from '../shared/types.ts';
-import * as api from '../services/api.ts';
+import { ResearchResult, SimilarityMatch } from '../shared/types.js';
+import { ApiError } from '../services/api.js';
 
 interface ResearchDetailModalProps {
   result: ResearchResult;
-  customCategories: { debate: string[]; romantic: string[] };
   onClose: () => void;
-  onUpdated: (next: ResearchResult) => void;
-  onApprovedToDatabase: () => Promise<void>;
+  onPatchResult: (id: string, updates: Partial<ResearchResult>) => Promise<void>;
+  onReanalyze: (id: string) => Promise<void>;
+  onGenerateIdea: (id: string) => Promise<void>;
+  onCheckDuplicate: (id: string) => Promise<void>;
+  onApproveToDatabase: (id: string, forceApprove: boolean) => Promise<void>;
+  onReject: (id: string) => Promise<void>;
 }
-
-export const QUEUE_STATUS_LABELS: Record<ResearchQueueStatus, string> = {
-  research_pending: 'Ожидает анализа',
-  analysis_completed: 'Анализ завершён',
-  idea_generated: 'Идея сформирована',
-  duplicate_check: 'Проверка дублей',
-  awaiting_review: 'Ожидает решения',
-  approved_for_database: 'Добавлено в базу',
-  rejected: 'Отклонено',
-};
 
 export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
   result,
-  customCategories,
   onClose,
-  onUpdated,
-  onApprovedToDatabase,
+  onPatchResult,
+  onReanalyze,
+  onGenerateIdea,
+  onCheckDuplicate,
+  onApproveToDatabase,
+  onReject,
 }) => {
-  const [card, setCard] = useState<ResearchResult>(result);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [infoMsg, setInfoMsg] = useState<string | null>(null);
-  const [duplicateWarningMatches, setDuplicateWarningMatches] = useState<
-    ResearchDuplicateMatch[] | null
-  >(null);
+  const [conflictMatches, setConflictMatches] = useState<SimilarityMatch[]>(
+    result.similarityMatches || []
+  );
 
-  useEffect(() => {
-    setCard(result);
-    setDuplicateWarningMatches(null);
-  }, [result]);
+  // Editable model insights
+  const [mainSituation, setMainSituation] = useState(result.mainSituation || '');
+  const [mainConflict, setMainConflict] = useState(result.mainConflict || '');
+  const [emotionalMechanism, setEmotionalMechanism] = useState(result.emotionalMechanism || '');
+  const [hiddenExpectation, setHiddenExpectation] = useState(result.hiddenExpectation || '');
+  const [unexpectedDetail, setUnexpectedDetail] = useState(result.unexpectedDetail || '');
+  const [researchNotes, setResearchNotes] = useState(result.researchNotes || '');
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // Editable draft title/fullPlot if present
+  const [draftTitle, setDraftTitle] = useState(result.generatedPlot?.title || '');
+  const [draftFullPlot, setDraftFullPlot] = useState(result.generatedPlot?.fullPlot || '');
+  const [draftQuestion, setDraftQuestion] = useState(
+    result.generatedPlot?.mainTriggerQuestion || ''
+  );
 
-  const categories = getCategoriesForCollection(card.collection, customCategories);
-
-  const updateIdeaField = <K extends keyof ResearchIdeaDraft>(
-    field: K,
-    val: ResearchIdeaDraft[K]
-  ) => {
-    setCard((prev) => {
-      const existingIdea: ResearchIdeaDraft = prev.generatedIdea || {
-        collection: prev.collection,
-        category: prev.targetCategory || categories[0],
-        subcategory: prev.relationshipType || 'Зарубежное исследование',
-        title: '',
-        shortDescription: '',
-        fullPlot: '',
-        participants: prev.participants,
-        setting: '',
-        coreConflictOrAction: prev.mainConflict,
-        sideAPosition: prev.positionsOfParticipants.sideA,
-        sideBPosition: prev.positionsOfParticipants.sideB,
-        emotionalMechanism: prev.emotionalMechanism,
-        hiddenExpectation: prev.hiddenExpectation,
-        unexpectedNuance: prev.unexpectedDetail,
-        possibleTwist: prev.possibleTwist,
-        mainTriggerQuestion: prev.readerReactionPotential,
-        additionalQuestions: [],
-        keywords: prev.keywords,
-        mainTheme: prev.mainSituation,
-        plotMechanic: prev.storyMechanic,
-        uniqueDetails: prev.unexpectedDetail,
-        originType: 'external',
-        sourceUrl: prev.sourceUrl,
-        ideaSource: `${prev.sourceName} (${prev.researchId})`,
-        researchNotes: prev.researchNotes,
-      };
-      return {
-        ...prev,
-        generatedIdea: {
-          ...existingIdea,
-          [field]: val,
-        },
-      };
-    });
-  };
-
-  const handleSaveChanges = async () => {
-    setBusyAction('save');
+  const runAction = async (key: string, fn: () => Promise<void>) => {
+    setBusyAction(key);
     setErrorMsg(null);
-    setInfoMsg(null);
     try {
-      const res = await api.updateResearchResult(card.researchId, {
-        targetCategory: card.targetCategory,
-        mainSituation: card.mainSituation,
-        participants: card.participants,
-        relationshipType: card.relationshipType,
-        mainConflict: card.mainConflict,
-        positionsOfParticipants: card.positionsOfParticipants,
-        emotionalMechanism: card.emotionalMechanism,
-        hiddenExpectation: card.hiddenExpectation,
-        unexpectedDetail: card.unexpectedDetail,
-        possibleTwist: card.possibleTwist,
-        readerReactionPotential: card.readerReactionPotential,
-        storyMechanic: card.storyMechanic,
-        researchNotes: card.researchNotes,
-        generatedIdea: card.generatedIdea,
-      });
-      setCard(res.result);
-      onUpdated(res.result);
-      setInfoMsg('Изменения карточки и заготовки сохранены.');
+      await fn();
     } catch (err) {
-      setErrorMsg((err as Error).message);
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleReanalyze = async () => {
-    setBusyAction('analyze');
-    setErrorMsg(null);
-    setInfoMsg(null);
-    try {
-      const res = await api.analyzeResearchResult(card.researchId);
-      setCard(res.result);
-      onUpdated(res.result);
-      setInfoMsg('Повторный анализ материала завершён.');
-    } catch (err) {
-      setErrorMsg((err as Error).message);
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleGenerateIdea = async () => {
-    setBusyAction('generate');
-    setErrorMsg(null);
-    setInfoMsg(null);
-    try {
-      const res = await api.generateResearchIdea(card.researchId);
-      setCard(res.result);
-      onUpdated(res.result);
-      setInfoMsg('Сформирована новая переосмысленная сюжетная основа.');
-    } catch (err) {
-      setErrorMsg((err as Error).message);
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleCheckDuplicates = async () => {
-    setBusyAction('dedup');
-    setErrorMsg(null);
-    setInfoMsg(null);
-    try {
-      const res = await api.checkResearchDuplicate(card.researchId);
-      setCard(res.result);
-      onUpdated(res.result);
-      setInfoMsg(
-        res.result.duplicateMatches.length > 0
-          ? `Найдено смысловых совпадений: ${res.result.duplicateMatches.length}.`
-          : 'Совпадений с базой и очередью не обнаружено.'
-      );
-    } catch (err) {
-      setErrorMsg((err as Error).message);
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleApprove = async (forceIgnoreDuplicates = false) => {
-    setBusyAction('approve');
-    setErrorMsg(null);
-    setInfoMsg(null);
-    try {
-      await api.updateResearchResult(card.researchId, {
-        targetCategory: card.targetCategory,
-        researchNotes: card.researchNotes,
-        generatedIdea: card.generatedIdea,
-      });
-      const res = await api.approveResearchResult(card.researchId, forceIgnoreDuplicates);
-      setCard(res.result);
-      onUpdated(res.result);
-      setDuplicateWarningMatches(null);
-      await onApprovedToDatabase();
-      setInfoMsg(
-        `Идея добавлена в основную STORY DATABASE под ID ${res.story.id} (verificationStatus = pending, usageStatus = unused).`
-      );
-    } catch (err) {
-      const typed = err as Error & {
-        status?: number;
-        matches?: ResearchDuplicateMatch[];
-        result?: ResearchResult;
-      };
-      if (typed.status === 409 && typed.matches) {
-        if (typed.result) {
-          setCard(typed.result);
-          onUpdated(typed.result);
-        }
-        setDuplicateWarningMatches(typed.matches);
-        setErrorMsg(typed.message);
+      if (err instanceof ApiError && err.status === 409 && err.matches) {
+        setConflictMatches(err.matches);
+        setErrorMsg(err.message);
       } else {
-        setErrorMsg(typed.message);
+        setErrorMsg(err instanceof Error ? err.message : 'Ошибка выполнения операции');
       }
     } finally {
       setBusyAction(null);
     }
   };
 
-  const handleReject = async () => {
-    setBusyAction('reject');
-    setErrorMsg(null);
-    try {
-      const res = await api.rejectResearchResult(card.researchId);
-      setCard(res.result);
-      onUpdated(res.result);
-      setInfoMsg('Идея переведена в статус rejected.');
-    } catch (err) {
-      setErrorMsg((err as Error).message);
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const qb = card.qualityBreakdown;
+  const handleSaveEdits = () =>
+    runAction('save', async () => {
+      const updates: Partial<ResearchResult> = {
+        mainSituation,
+        mainConflict,
+        emotionalMechanism,
+        hiddenExpectation,
+        unexpectedDetail,
+        researchNotes,
+      };
+      if (result.generatedPlot) {
+        updates.generatedPlot = {
+          ...result.generatedPlot,
+          title: draftTitle,
+          fullPlot: draftFullPlot,
+          mainTriggerQuestion: draftQuestion,
+        };
+      }
+      await onPatchResult(result.researchId, updates);
+    });
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 md:p-6"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 p-4">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-xl">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span className="font-mono font-semibold text-slate-800">{card.researchId}</span>
-              <span aria-hidden="true">·</span>
-              <span>
-                {card.collection === 'debate'
-                  ? 'DEBATE RESEARCH («Кто здесь прав?»)'
-                  : 'ROMANTIC RESEARCH («Романтические»)'}
-              </span>
-              <span aria-hidden="true">·</span>
-              <span>{card.sourceName}</span>
-              <span aria-hidden="true">·</span>
-              <span className="font-medium text-indigo-800">
-                {QUEUE_STATUS_LABELS[card.queueStatus]}
-              </span>
-              {card.savedStoryId && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <span className="font-mono font-semibold text-emerald-700">
-                    В базе: {card.savedStoryId}
-                  </span>
-                </>
-              )}
+        <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
+          <div className="min-w-0 pr-4">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <span className="font-mono font-semibold text-zinc-800">{result.researchId}</span>
+              <span>·</span>
+              <span>{result.sourceName}</span>
+              <span>·</span>
+              <span>{result.collection === 'debate' ? 'Споры' : 'Романтика'}</span>
+              <span>·</span>
+              <span className="font-mono">{result.analysisStatus}</span>
+              <span>·</span>
+              <span className="font-mono">{result.queueStatus}</span>
             </div>
-            <h2 className="mt-1 text-lg font-semibold text-slate-900">
-              {card.generatedIdea?.title || card.sourceTitle}
-            </h2>
+            <h3 className="mt-0.5 truncate text-lg font-semibold text-zinc-900">
+              {result.generatedPlot?.title || result.sourceTitle}
+            </h3>
           </div>
-
           <button
             type="button"
             onClick={onClose}
-            aria-label="Закрыть карточку"
-            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-md p-1.5 text-zinc-400 hover:bg-stone-100 hover:text-zinc-700 cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Scrollable Content */}
+        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {errorMsg && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
               {errorMsg}
             </div>
           )}
-          {infoMsg && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
-              {infoMsg}
-            </div>
-          )}
 
-          {/* Duplicate Alert Block */}
-          {(duplicateWarningMatches || card.duplicateMatches.length > 0) && (
-            <div className="rounded-lg border border-amber-300 bg-amber-50/70 p-4 space-y-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-xs font-semibold text-amber-950">
-                  <AlertTriangle className="h-4 w-4 text-amber-700" />
-                  <span>
-                    Обнаружены смысловые совпадения ({(duplicateWarningMatches || card.duplicateMatches).length})
-                  </span>
-                </div>
-                {duplicateWarningMatches && card.queueStatus !== 'approved_for_database' && (
-                  <button
-                    type="button"
-                    disabled={busyAction !== null}
-                    onClick={() => handleApprove(true)}
-                    className="rounded border border-amber-500 bg-white px-3 py-1 text-xs font-semibold text-amber-950 hover:bg-amber-100"
-                  >
-                    Всё равно добавить в базу
-                  </button>
-                )}
+          {/* Block 1: Verified source facts */}
+          <div className="rounded-md border border-stone-200 bg-stone-50/70 p-4 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-semibold uppercase tracking-wider text-zinc-500">
+                Блок 1 · Проверенные факты внешнего источника
+              </span>
+              <span className="font-mono text-zinc-600">
+                Достоверность: {result.sourceReliability} · Дата: {result.sourceDate || '—'}
+              </span>
+            </div>
+            <div className="text-sm font-medium text-zinc-900">{result.sourceTitle}</div>
+            <p className="text-xs leading-relaxed text-zinc-700">
+              {result.sourceSummary || result.sourceExcerpt || 'Фрагмент источника'}
+            </p>
+            {result.sourceUrl && (
+              <div className="flex items-center gap-1.5 pt-1 text-xs font-mono text-zinc-600 break-all">
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                <span>{result.sourceUrl}</span>
               </div>
-              {(duplicateWarningMatches || card.duplicateMatches).map((m) => (
-                <div
-                  key={`${m.matchScope}-${m.matchedId}`}
-                  className="rounded border border-amber-200 bg-white px-3 py-2 text-xs"
-                >
-                  <div className="flex items-center justify-between gap-2 font-semibold text-slate-900">
-                    <span>
-                      [{m.matchScope === 'story_database' ? 'Основная база' : m.matchScope === 'current_batch' ? 'Текущая партия' : 'Очередь исследований'}]{' '}
-                      <span className="font-mono">{m.matchedId}</span> · {m.matchedTitle}
-                    </span>
-                    <span className="font-mono text-amber-800 tabular-nums">{m.similarityScore}%</span>
-                  </div>
-                  <p className="mt-1 text-slate-600">{m.reason}</p>
-                </div>
-              ))}
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* SECTION A: VERIFIED SOURCE FACTS (Separated from AI deductions) */}
-          <section className="rounded-lg border border-slate-200 bg-slate-50/70 p-4 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
-              <h3 className="text-sm font-semibold text-slate-900">
-                1. Факты из найденного зарубежного источника
-              </h3>
-              {card.sourceUrl && (
-                <a
-                  href={card.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 hover:underline"
+          {/* Block 2: Editable analytical conclusions */}
+          <div className="rounded-md border border-stone-200 bg-white p-4 space-y-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Блок 2 · Аналитический разбор и психологический механизм (редактируется)
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="block text-xs font-medium text-zinc-700">
+                Суть ситуации (mainSituation)
+                <textarea
+                  rows={2}
+                  value={mainSituation}
+                  onChange={(e) => setMainSituation(e.target.value)}
+                  className="mt-1 w-full rounded border border-stone-200 px-2.5 py-1.5 text-xs text-zinc-900"
+                />
+              </label>
+              <label className="block text-xs font-medium text-zinc-700">
+                Основной конфликт / дилемма
+                <textarea
+                  rows={2}
+                  value={mainConflict}
+                  onChange={(e) => setMainConflict(e.target.value)}
+                  className="mt-1 w-full rounded border border-stone-200 px-2.5 py-1.5 text-xs text-zinc-900"
+                />
+              </label>
+              <label className="block text-xs font-medium text-zinc-700">
+                Эмоциональный механизм
+                <textarea
+                  rows={2}
+                  value={emotionalMechanism}
+                  onChange={(e) => setEmotionalMechanism(e.target.value)}
+                  className="mt-1 w-full rounded border border-stone-200 px-2.5 py-1.5 text-xs text-zinc-900"
+                />
+              </label>
+              <label className="block text-xs font-medium text-zinc-700">
+                Скрытое ожидание
+                <textarea
+                  rows={2}
+                  value={hiddenExpectation}
+                  onChange={(e) => setHiddenExpectation(e.target.value)}
+                  className="mt-1 w-full rounded border border-stone-200 px-2.5 py-1.5 text-xs text-zinc-900"
+                />
+              </label>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="block text-xs font-medium text-zinc-700">
+                Неожиданная деталь (unexpectedDetail)
+                <input
+                  type="text"
+                  value={unexpectedDetail}
+                  onChange={(e) => setUnexpectedDetail(e.target.value)}
+                  className="mt-1 w-full rounded border border-stone-200 px-2.5 py-1.5 text-xs text-zinc-900"
+                />
+              </label>
+              <label className="block text-xs font-medium text-zinc-700">
+                Редакторские заметки (researchNotes)
+                <input
+                  type="text"
+                  value={researchNotes}
+                  onChange={(e) => setResearchNotes(e.target.value)}
+                  className="mt-1 w-full rounded border border-stone-200 px-2.5 py-1.5 text-xs text-zinc-900"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Block 3: Generated Russian plot draft */}
+          <div className="rounded-md border border-stone-200 bg-white p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                Блок 3 · Заготовка сюжетной основы для базы MELO_LOVE
+              </span>
+              {!result.generatedPlot && (
+                <button
+                  type="button"
+                  disabled={busyAction !== null}
+                  onClick={() => runAction('idea', () => onGenerateIdea(result.researchId))}
+                  className="inline-flex items-center gap-1 rounded bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
                 >
-                  Открыть оригинал <ExternalLink className="h-3 w-3" />
-                </a>
+                  {busyAction === 'idea' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  Сформировать заготовку
+                </button>
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-              <div>
-                <div className="text-slate-500">Площадка</div>
-                <div className="font-medium text-slate-900">{card.sourceName}</div>
+            {result.generatedPlot ? (
+              <div className="space-y-3">
+                <div className="text-xs text-zinc-500">
+                  Категория: <span className="font-medium text-zinc-800">{result.generatedPlot.category}</span>{' '}
+                  / {result.generatedPlot.subcategory} · Механика: {result.generatedPlot.plotMechanic}
+                </div>
+                <label className="block text-xs font-medium text-zinc-700">
+                  Название заготовки
+                  <input
+                    type="text"
+                    value={draftTitle}
+                    onChange={(e) => setDraftTitle(e.target.value)}
+                    className="mt-1 w-full rounded border border-stone-200 px-3 py-1.5 text-sm font-medium text-zinc-900"
+                  />
+                </label>
+                <label className="block text-xs font-medium text-zinc-700">
+                  Сюжетная основа (fullPlot)
+                  <textarea
+                    rows={4}
+                    value={draftFullPlot}
+                    onChange={(e) => setDraftFullPlot(e.target.value)}
+                    className="mt-1 w-full rounded border border-stone-200 px-3 py-1.5 text-xs leading-relaxed text-zinc-900"
+                  />
+                </label>
+                <label className="block text-xs font-medium text-zinc-700">
+                  Главный триггер-вопрос
+                  <input
+                    type="text"
+                    value={draftQuestion}
+                    onChange={(e) => setDraftQuestion(e.target.value)}
+                    className="mt-1 w-full rounded border border-stone-200 px-3 py-1.5 text-xs text-zinc-900"
+                  />
+                </label>
               </div>
-              <div>
-                <div className="text-slate-500">Автор (факт)</div>
-                <div className="font-mono text-slate-800">{card.sourceAuthor || 'unknown'}</div>
+            ) : (
+              <p className="text-xs text-zinc-500">
+                Заготовка ещё не сгенерирована (режим «Только анализ» или требуется повторный анализ).
+              </p>
+            )}
+          </div>
+
+          {/* Block 4: 100-point rubric */}
+          {result.quality && (
+            <div className="rounded-md border border-stone-200 bg-stone-50 p-4 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-semibold uppercase tracking-wider text-zinc-500">
+                  Блок 4 · Оценка потенциала идеи · {result.quality.tierLabel}
+                </span>
+                <span className="font-mono text-base font-semibold text-zinc-900 tabular-nums">
+                  {result.quality.overall}/100
+                </span>
               </div>
-              <div>
-                <div className="text-slate-500">Дата оригинала</div>
-                <div className="font-mono text-slate-800">{card.sourceDate || 'unknown'}</div>
-              </div>
-              <div>
-                <div className="text-slate-500">Надёжность ссылки</div>
-                <div className="font-medium text-slate-800">{card.sourceReliability}</div>
+              <p className="text-xs text-zinc-600">{result.quality.explanation}</p>
+              <div className="grid grid-cols-2 gap-2 pt-1 text-xs sm:grid-cols-4">
+                {Object.entries(result.quality.breakdown).map(([k, val]) => (
+                  <div key={k} className="rounded border border-stone-200 bg-white px-2.5 py-1.5">
+                    <div className="truncate text-[11px] text-zinc-500">{k}</div>
+                    <div className="font-mono font-semibold text-zinc-900 tabular-nums">{val}</div>
+                  </div>
+                ))}
               </div>
             </div>
+          )}
 
-            <div className="text-xs">
-              <div className="text-slate-500">Заголовок источника ({card.originalLanguage})</div>
-              <div className="mt-0.5 font-medium text-slate-900">{card.sourceTitle}</div>
-            </div>
-
-            <div className="text-xs">
-              <div className="text-slate-500">Фактическая выжимка материала</div>
-              <p className="mt-0.5 leading-relaxed text-slate-700">{card.sourceSummary}</p>
-            </div>
-          </section>
-
-          {/* SECTION B: ANALYTICAL CONCLUSIONS */}
-          <section className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-              <h3 className="text-sm font-semibold text-slate-900">
-                2. Аналитические выводы модели (редактируемо)
-              </h3>
-              <span className="font-mono text-xs text-slate-600 tabular-nums">
-                Оригинальность переосмысления: {card.originalityAssessment}/100
+          {/* Block 5: Duplicate check & 409 force-approve */}
+          <div className="rounded-md border border-stone-200 bg-white p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                Блок 5 · Трёхконтурная проверка дублей (URL + База + Очередь)
               </span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Категория</label>
-                <select
-                  value={card.targetCategory}
-                  onChange={(e) => setCard({ ...card, targetCategory: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
-                >
-                  {categories.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600">Сюжетная механика</label>
-                <select
-                  value={card.storyMechanic}
-                  onChange={(e) => setCard({ ...card, storyMechanic: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900"
-                >
-                  {!PLOT_MECHANICS.includes(card.storyMechanic) && (
-                    <option value={card.storyMechanic}>{card.storyMechanic}</option>
-                  )}
-                  {PLOT_MECHANICS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs">
-              <div>
-                <label className="block font-medium text-slate-600">Основная ситуация</label>
-                <textarea
-                  rows={2}
-                  value={card.mainSituation}
-                  onChange={(e) => setCard({ ...card, mainSituation: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-600">Конфликт / эмоциональное событие</label>
-                <textarea
-                  rows={2}
-                  value={card.mainConflict}
-                  onChange={(e) => setCard({ ...card, mainConflict: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-600">Позиция / мотивация стороны A</label>
-                <textarea
-                  rows={2}
-                  value={card.positionsOfParticipants.sideA}
-                  onChange={(e) =>
-                    setCard({
-                      ...card,
-                      positionsOfParticipants: {
-                        ...card.positionsOfParticipants,
-                        sideA: e.target.value,
-                      },
-                    })
-                  }
-                  className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-600">Позиция / реакция стороны B</label>
-                <textarea
-                  rows={2}
-                  value={card.positionsOfParticipants.sideB}
-                  onChange={(e) =>
-                    setCard({
-                      ...card,
-                      positionsOfParticipants: {
-                        ...card.positionsOfParticipants,
-                        sideB: e.target.value,
-                      },
-                    })
-                  }
-                  className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-600">Скрытое противоречие / ожидание</label>
-                <input
-                  type="text"
-                  value={card.hiddenExpectation}
-                  onChange={(e) => setCard({ ...card, hiddenExpectation: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-600">Неожиданная деталь / возможный поворот</label>
-                <input
-                  type="text"
-                  value={card.unexpectedDetail}
-                  onChange={(e) => setCard({ ...card, unexpectedDetail: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs">
-              <div>
-                <label className="block font-medium text-slate-600">Почему история интересна читателям</label>
-                <textarea
-                  rows={2}
-                  value={card.readerReactionPotential}
-                  onChange={(e) => setCard({ ...card, readerReactionPotential: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-600">Заметки исследователя (researchNotes)</label>
-                <textarea
-                  rows={2}
-                  value={card.researchNotes}
-                  onChange={(e) => setCard({ ...card, researchNotes: e.target.value })}
-                  className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* SECTION C: GENERATED ORIGINAL IDEA FOR STORY DATABASE */}
-          <section className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-              <h3 className="text-sm font-semibold text-slate-900">
-                3. Переосмысленная оригинальная сюжетная основа (для STORY DATABASE)
-              </h3>
               <button
                 type="button"
                 disabled={busyAction !== null}
-                onClick={handleGenerateIdea}
-                className="inline-flex items-center gap-1.5 rounded border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-100 disabled:opacity-50"
+                onClick={() => runAction('dup', () => onCheckDuplicate(result.researchId))}
+                className="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-stone-50 cursor-pointer"
               >
-                <Sparkles className="h-3.5 w-3.5" />
-                {card.generatedIdea ? 'Создать новую версию идеи' : 'Сгенерировать оригинальную идею'}
+                {busyAction === 'dup' ? 'Проверяем...' : 'Проверить дубли сейчас'}
               </button>
             </div>
 
-            {!card.generatedIdea ? (
-              <p className="text-xs text-slate-500">
-                Пока выполнен только анализ источника. Нажмите кнопку справа, чтобы создать самостоятельную русскую сюжетную основу без дословного перевода.
+            {conflictMatches.length === 0 ? (
+              <p className="text-xs text-teal-800">
+                Совпадений с основной базой сюжетов и очередью исследований не найдено.
               </p>
             ) : (
-              <div className="space-y-3 text-xs">
-                <div>
-                  <label className="block font-medium text-slate-600">Название сюжета</label>
-                  <input
-                    type="text"
-                    value={card.generatedIdea.title}
-                    onChange={(e) => updateIdeaField('title', e.target.value)}
-                    className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm font-semibold text-slate-900"
-                  />
+              <div className="space-y-2 rounded border border-amber-200 bg-amber-50/70 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-950">
+                  <AlertTriangle className="h-4 w-4 text-amber-700" />
+                  Найдены пересечения ({conflictMatches.length})
                 </div>
-                <div>
-                  <label className="block font-medium text-slate-600">Краткое описание</label>
-                  <textarea
-                    rows={2}
-                    value={card.generatedIdea.shortDescription}
-                    onChange={(e) => updateIdeaField('shortDescription', e.target.value)}
-                    className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-slate-600">Полная сюжетная основа</label>
-                  <textarea
-                    rows={4}
-                    value={card.generatedIdea.fullPlot}
-                    onChange={(e) => updateIdeaField('fullPlot', e.target.value)}
-                    className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 leading-relaxed text-slate-900"
-                  />
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="block font-medium text-slate-600">Участники</label>
-                    <input
-                      type="text"
-                      value={card.generatedIdea.participants}
-                      onChange={(e) => updateIdeaField('participants', e.target.value)}
-                      className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                    />
+                {conflictMatches.map((m) => (
+                  <div key={m.storyId} className="text-xs text-zinc-800">
+                    <span className="font-mono font-semibold">{m.storyId}</span> · {m.title} (
+                    <span className="font-mono tabular-nums">{m.score}%</span>) — {m.reason}
                   </div>
-                  <div>
-                    <label className="block font-medium text-slate-600">Место действия</label>
-                    <input
-                      type="text"
-                      value={card.generatedIdea.setting}
-                      onChange={(e) => updateIdeaField('setting', e.target.value)}
-                      className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-medium text-slate-600">Возможный поворот</label>
-                    <input
-                      type="text"
-                      value={card.generatedIdea.possibleTwist}
-                      onChange={(e) => updateIdeaField('possibleTwist', e.target.value)}
-                      className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-medium text-slate-600">Основной триггерный вопрос</label>
-                    <input
-                      type="text"
-                      value={card.generatedIdea.mainTriggerQuestion}
-                      onChange={(e) => updateIdeaField('mainTriggerQuestion', e.target.value)}
-                      className="mt-1 w-full rounded border border-slate-300 px-2.5 py-1.5 text-slate-900"
-                    />
-                  </div>
-                </div>
+                ))}
+                {!result.approvedStoryId && result.generatedPlot && (
+                  <button
+                    type="button"
+                    disabled={busyAction !== null}
+                    onClick={() => runAction('force', () => onApproveToDatabase(result.researchId, true))}
+                    className="mt-1 inline-flex items-center gap-1.5 rounded border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium text-rose-800 hover:bg-rose-50 cursor-pointer"
+                  >
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    Подтвердить перенос принудительно (forceApprove)
+                  </button>
+                )}
               </div>
             )}
-          </section>
-
-          {/* SECTION D: QUALITY SCORE BREAKDOWN (0-100) */}
-          <section className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-              <h3 className="text-sm font-semibold text-slate-900">
-                4. Оценка качества исследования и идеи
-              </h3>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="font-semibold text-slate-900">{qb.tierLabel}</span>
-                <span aria-hidden="true">·</span>
-                <span className="font-mono text-base font-bold text-indigo-800 tabular-nums">
-                  {qb.overall}/100
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5 text-xs sm:grid-cols-4">
-              <MetricCell label="Оригинальность" value={qb.originality} />
-              <MetricCell label="Жизненность" value={qb.realism} />
-              <MetricCell label="Конкретность" value={qb.specificity} />
-              <MetricCell label="Эмоц. выразительность" value={qb.emotionalExpressiveness} />
-              <MetricCell label="Интерес для читателя" value={qb.readerInterest} />
-              <MetricCell label="Разнообразие" value={qb.diversity} />
-              <MetricCell label="Потенциал обсуждения" value={qb.discussionPotential} />
-              <MetricCell label="Качество механики" value={qb.mechanicQuality} />
-              {card.collection === 'debate' ? (
-                <>
-                  <MetricCell label="Неоднозначность" value={qb.ambiguity ?? 75} />
-                  <MetricCell label="Аргументы обеих сторон" value={qb.bothSidesArgumentation ?? 75} />
-                  <MetricCell label="Потенциал дискуссии" value={qb.debatePotential ?? 75} />
-                </>
-              ) : (
-                <>
-                  <MetricCell label="Теплота" value={qb.warmth ?? 76} />
-                  <MetricCell label="Естественность" value={qb.naturalness ?? 76} />
-                  <MetricCell label="Сила детали" value={qb.emotionalDetailPower ?? 76} />
-                  <MetricCell label="Узнаваемость" value={qb.relatability ?? 76} />
-                  <MetricCell label="Без приторности" value={qb.nonSaccharine ?? 76} />
-                </>
-              )}
-            </div>
-            <p className="text-xs leading-relaxed text-slate-600">{qb.explanation}</p>
-          </section>
+          </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-6 py-3.5">
+        {/* Footer */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 bg-stone-50 px-6 py-3.5">
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={busyAction !== null}
-              onClick={handleReanalyze}
-              className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              onClick={() => runAction('reanalyze', () => onReanalyze(result.researchId))}
+              className="inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-stone-100 cursor-pointer"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${busyAction === 'analyze' ? 'animate-spin' : ''}`} />
-              Повторно проанализировать
+              <RefreshCw className={`h-3.5 w-3.5 ${busyAction === 'reanalyze' ? 'animate-spin' : ''}`} />
+              Переанализировать
             </button>
             <button
               type="button"
               disabled={busyAction !== null}
-              onClick={handleCheckDuplicates}
-              className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              onClick={handleSaveEdits}
+              className="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-stone-100 cursor-pointer"
             >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Проверить дубли
+              {busyAction === 'save' ? 'Сохраняем...' : 'Сохранить правки'}
             </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {card.queueStatus !== 'approved_for_database' && card.queueStatus !== 'rejected' && (
+            {result.queueStatus !== 'rejected' && !result.approvedStoryId && (
               <button
                 type="button"
                 disabled={busyAction !== null}
-                onClick={handleReject}
-                className="rounded border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                onClick={() =>
+                  runAction('reject', async () => {
+                    await onReject(result.researchId);
+                    onClose();
+                  })
+                }
+                className="inline-flex items-center gap-1 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-rose-800 hover:bg-rose-50 cursor-pointer"
               >
+                <Trash2 className="h-3.5 w-3.5" />
                 Отклонить
               </button>
             )}
-            <button
-              type="button"
-              disabled={busyAction !== null}
-              onClick={handleSaveChanges}
-              className="rounded border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
-            >
-              {busyAction === 'save' ? 'Сохранение...' : 'Сохранить правки'}
-            </button>
-            {card.queueStatus !== 'approved_for_database' && (
+
+            {result.approvedStoryId ? (
+              <span className="font-mono text-xs font-semibold text-teal-800">
+                Перенесено в базу как {result.approvedStoryId}
+              </span>
+            ) : (
               <button
                 type="button"
-                disabled={busyAction !== null}
-                onClick={() => handleApprove(false)}
-                className="inline-flex items-center gap-1.5 rounded bg-indigo-700 px-4 py-1.5 text-xs font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+                disabled={busyAction !== null || !result.generatedPlot}
+                onClick={() =>
+                  runAction('approve', async () => {
+                    await onApproveToDatabase(result.researchId, false);
+                    onClose();
+                  })
+                }
+                className="inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-4 py-2 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
               >
                 <Check className="h-3.5 w-3.5" />
-                {busyAction === 'approve' ? 'Добавление...' : 'Одобрить в STORY DATABASE'}
+                Одобрить и перенести в базу
               </button>
             )}
           </div>
@@ -729,10 +419,3 @@ export const ResearchDetailModal: React.FC<ResearchDetailModalProps> = ({
     </div>
   );
 };
-
-const MetricCell: React.FC<{ label: string; value: number }> = ({ label, value }) => (
-  <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-    <span className="truncate pr-2 text-slate-600">{label}</span>
-    <span className="font-mono font-semibold text-slate-900 tabular-nums">{value}</span>
-  </div>
-);
