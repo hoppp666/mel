@@ -1,60 +1,20 @@
-name: MELO_LOVE Publishing & Verification (Every 2h)
-
+name: MELO_LOVE Publishing Scheduler (Every 2h)
 on:
-  workflow_dispatch:
-  schedule:
-    # Независимое расписание (раз в 2 часа)
-    - cron: '0 */2 * * *'
-
+workflow_dispatch:
+schedule:
+# Независимое расписание публикаций (раз в 2 часа, до 12 постов в сутки).
+- cron: '0 */2 * * *'
+Единая блокировка с melo-love-research.yml для защиты JSON-базы от гонок
 concurrency:
-  group: melo-love-autonomous-data
-  cancel-in-progress: false
-
+group: melo-love-autonomous-data
+cancel-in-progress: false
 permissions:
-  contents: write
-
+contents: write
 jobs:
-  verify-and-run:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --legacy-peer-deps
-          else
-            npm install --no-package-lock --no-audit --no-fund --legacy-peer-deps
-          fi
-
-      - name: Run TypeScript check and unit tests
-        id: verify
-        run: |
-          npm run lint
-          npx tsx --test --test-concurrency=1 tests/research.test.ts tests/content.test.ts
-
-      - name: Commit and push state changes ([skip ci])
-        if: ${{ !cancelled() && steps.verify.outcome == 'success' }}
-        run: |
-          git config user.name "melo-love-bot"
-          git config user.email "melo-love-bot@users.noreply.github.com"
-          git add data/*.json || true
-          if git diff --cached --quiet; then
-            echo "No state changes to commit."
-            exit 0
-          fi
-          git commit -m "chore(melo-love): scheduled state update [skip ci]"
-          for attempt in 1 2 3; do
-            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
-            echo "Push conflict on attempt $attempt, retrying..."
-            sleep 3
-          done
-          exit 1
+verify-and-publish:
+runs-on: ubuntu-latest
+steps:
+- name: Checkout repository
+uses: actions/checkout@v4
+with:
+fetch-depth: 0
