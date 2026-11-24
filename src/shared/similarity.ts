@@ -640,3 +640,11 @@ export function researchResultsToCsv(results: ResearchResult[]): string {
   return '\uFEFF' + [headers.join(','), ...rows].join('\n');
 }
 
+// --- Compatibility Aliases for legacy server.ts / tests ---
+export function calculateQualityScore(
+  metrics: Parameters<typeof calculateOverallQuality>[0],
+  collection: CollectionType
+): number {
+  return calculateOverallQuality(metrics, collection);
+}
+

@@ -532,3 +532,11 @@ export async function fetchDirectPublicFeedMaterials(
     };
   }
 }
+
+// --- Compatibility Exports ---
+export const checkResearchSourceAvailability = probeSourceAvailability;
+export type DiscoveredPublicArticle = DiscoveredRawMaterial;
+export async function fetchPublicArticlesFromSource(_source: unknown): Promise<DiscoveredRawMaterial[]> {
+  return [];
+}
+

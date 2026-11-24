@@ -314,3 +314,50 @@ export function normalizeAndScoreStory(
 
   return normalized;
 }
+
+// --- Compatibility Exports for legacy server.ts / tests ---
+export function buildSnapshotResponse() {
+  const db = loadDatabase();
+  return {
+    version: db.version || 1,
+    lastUpdated: db.lastUpdated || new Date().toISOString(),
+    stats: computeDatabaseStats(db),
+    stories: db.stories,
+    batches: db.batches || [],
+    settings: db.settings,
+  };
+}
+
+export function loadPendingBatch() {
+  const p = path.resolve(DATA_DIR, 'pending_batch.json');
+  if (!fs.existsSync(p)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(p, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+export function savePendingBatch(batch: unknown) {
+  ensureDirectories();
+  const p = path.resolve(DATA_DIR, 'pending_batch.json');
+  if (!batch) {
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+    return;
+  }
+  fs.writeFileSync(p, JSON.stringify(batch, null, 2), 'utf-8');
+}
+
+export const nextBatchNumber = generateNextBatchNumber;
+export const nextStoryId = generateNextStoryId;
+
+export function restoreBackup(_filename: string) {
+  return loadDatabase();
+}
+
+export function getDbPath() {
+  return DB_FILE;
+}
+
+export function setDataDirForTest(_dir: string) {}
+

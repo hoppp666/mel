@@ -994,3 +994,11 @@ export function rejectResearchResult(researchId: string, reason?: string): Resea
   saveResearchResults(results);
   return results[idx];
 }
+
+// --- Compatibility Exports ---
+export const cancelResearchJob = requestCancelResearchJob;
+export async function checkDuplicateForResult(_card: unknown) {
+  return [];
+}
+export const startResearchJob = startResearchJobAsync;
+

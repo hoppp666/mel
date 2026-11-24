@@ -395,3 +395,14 @@ export function computeResearchStatistics(
     averageResearchQuality,
   };
 }
+
+// --- Compatibility Exports ---
+export const createResearchBackup = createResearchBackupSnapshot;
+export function nextResearchId(collection: CollectionType = 'debate') {
+  const prefix = collection === 'debate' ? 'RES-D-' : 'RES-R-';
+  return `${prefix}${Date.now().toString(36).toUpperCase()}`;
+}
+export function getResearchJobsPath() { return JOBS_FILE; }
+export function getResearchResultsPath() { return RESULTS_FILE; }
+export function getResearchSourcesPath() { return SOURCES_FILE; }
+

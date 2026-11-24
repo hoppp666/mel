@@ -550,3 +550,9 @@ export function computeContentStatistics(
     overusedPhrasebookCount: phrasebook.filter((p) => p.isOverused).length,
   };
 }
+
+// --- Compatibility Exports ---
+export const recoverInterruptedDrafts = recoverInterruptedContentDrafts;
+export const createContentBackup = createContentBackupSnapshot;
+export function getContentDraftsPath() { return DRAFTS_FILE; }
+

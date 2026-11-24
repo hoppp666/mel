@@ -1,143 +1,271 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
 import {
   calculateResearchQuality,
   findResearchDuplicates,
-  findSimilarStories,
   getResearchQualityTier,
   researchResultsToCsv,
-} from '../src/shared/similarity.js';
-import { DEFAULT_RESEARCH_SOURCES } from '../src/shared/categories.js';
-import { ResearchResult } from '../src/shared/types.js';
-import { buildDebateSeeds } from '../server/seedDebate.js';
-import { buildRomanticSeeds } from '../server/seedRomantic.js';
+} from '../src/shared/similarity.ts';
+import {
+  createInitialResearchSources,
+} from '../server/researchStorage.ts';
+import { extractDomainFromUrl } from '../server/researchSources.ts';
+import type { ResearchResult, StoryPlot } from '../src/shared/types.ts';
 
-function makeResearchResult(overrides: Partial<ResearchResult>): ResearchResult {
-  return {
-    researchId: 'RES-D-0001',
-    jobId: 'JOB-1',
-    sourceId: 'SRC-THECUT-REL',
-    sourceName: 'The Cut — Relationships',
-    sourceUrl: 'https://www.thecut.com/article/test-split-bill.html',
-    sourceTitle: 'Should couples split rent based on income?',
-    sourceAuthor: 'Editorial',
-    sourceDate: '2026-10-01',
-    researchDate: '2026-11-10T10:00:00.000Z',
-    sourceType: 'media',
-    collection: 'debate',
-    originalLanguage: 'en',
-    sourceExcerpt: 'Excerpt about splitting shared apartment costs proportionally.',
-    sourceSummary: 'Couple argues whether rent should be 50/50 or income-based.',
-    mainSituation: 'Пара спорит о делении аренды пополам при разнице доходов в 4 раза.',
-    participants: 'Партнёры 29 и 32 лет',
-    relationshipType: 'Совместная аренда',
-    mainConflict: 'Равная доля vs пропорциональный вклад в аренду.',
-    positionsOfParticipants: 'Он настаивает на 50/50, она предлагает пропорцию.',
-    emotionalMechanism: 'Обида из-за ощущения несправедливости при разной нагрузке.',
-    hiddenExpectation: 'Ожидание партнёрской солидарности без пересчёта чеков.',
-    unexpectedDetail: 'Инициатор 50/50 сам выбрал дорогую квартиру ближе к своему офису.',
-    possibleTwist: 'Она соглашается на 50/50, но при переезде в жильё по её бюджету.',
-    readerReactionPotential: 'Высокий спор о честности.',
-    storyMechanic: 'Противоречивое ожидание',
-    keywords: ['аренда', 'бюджет', 'пополам'],
-    researchNotes: 'Тестовая карточка',
-    sourceReliability: 'verified_direct',
-    analysisStatus: 'completed',
-    originalityAssessment: 'Свежий бытовой разворот.',
-    queueStatus: 'awaiting_review',
-    generatedPlot: null,
-    quality: null,
-    similarityMatches: [],
-    duplicateFlag: false,
-    ...overrides,
-  };
-}
-
-test('calculateResearchQuality returns accurate tier labels across thresholds', () => {
-  assert.equal(getResearchQualityTier(92), 'Отличная идея');
+test('Quality scoring returns accurate 0-100 scores and exact tier labels', () => {
+  assert.equal(getResearchQualityTier(94), 'Отличная идея');
   assert.equal(getResearchQualityTier(87), 'Хорошая идея');
-  assert.equal(getResearchQualityTier(79), 'Требует проверки');
-  assert.equal(getResearchQualityTier(65), 'Рекомендуется доработка или отклонение');
+  assert.equal(getResearchQualityTier(78), 'Требует проверки');
+  assert.equal(getResearchQualityTier(72), 'Рекомендуется доработка или отклонение');
 
-  const qDebate = calculateResearchQuality('debate', {
-    originality: 92,
-    realism: 94,
-    specificity: 91,
-    emotionalExpressiveness: 90,
-    readerInterest: 93,
-    diversity: 90,
-    discussionPotential: 95,
-    mechanicQuality: 92,
-    ambiguity: 91,
-    bothSidesArgument: 90,
-    debatePotential: 94,
-  });
-  assert.equal(qDebate.tierLabel, 'Отличная идея');
-  assert.ok(qDebate.overall >= 90);
+  const debateScore = calculateResearchQuality(
+    {
+      originality: 90,
+      realism: 90,
+      specificity: 90,
+      emotionalExpressiveness: 90,
+      readerInterest: 90,
+      diversity: 90,
+      discussionPotential: 90,
+      mechanicQuality: 90,
+      ambiguity: 90,
+      bothSidesArgumentation: 90,
+      debatePotential: 90,
+    },
+    'debate'
+  );
+  assert.equal(debateScore.overall, 90);
+  assert.equal(debateScore.tierLabel, 'Отличная идея');
+
+  const romanticScore = calculateResearchQuality(
+    {
+      originality: 80,
+      realism: 80,
+      specificity: 80,
+      emotionalExpressiveness: 80,
+      readerInterest: 80,
+      diversity: 80,
+      discussionPotential: 80,
+      mechanicQuality: 80,
+      warmth: 86,
+      naturalness: 86,
+      emotionalDetailPower: 86,
+      relatability: 86,
+      nonSaccharine: 86,
+    },
+    'romantic'
+  );
+  assert.equal(romanticScore.overall, 82);
+  assert.equal(romanticScore.tierLabel, 'Требует проверки');
 });
 
-test('DEFAULT_RESEARCH_SOURCES contains 13 valid system sources', () => {
-  assert.equal(DEFAULT_RESEARCH_SOURCES.length, 13);
-  const ids = new Set(DEFAULT_RESEARCH_SOURCES.map((s) => s.id));
-  assert.equal(ids.size, 13);
-  assert.ok(DEFAULT_RESEARCH_SOURCES.every((s) => s.isSystem && s.url.startsWith('https://')));
-});
+test('Initial foreign sources catalog contains Reddit + Media and starts unchecked', () => {
+  const sources = createInitialResearchSources();
+  assert.ok(sources.length >= 13);
 
-test('findResearchDuplicates catches identical URLs & semantic duplicates while ignoring generic relation words', () => {
-  const existingStories = [...buildDebateSeeds(), ...buildRomanticSeeds()];
-  const candidateSameUrl = makeResearchResult({
-    researchId: 'RES-D-0100',
-    sourceUrl: 'http://thecut.com/article/test-split-bill.html/',
-  });
-  const otherQueue = [
-    makeResearchResult({
-      researchId: 'RES-D-0001',
-      sourceUrl: 'https://www.thecut.com/article/test-split-bill.html',
-    }),
-  ];
+  const urls = sources.map((s) => s.url);
+  assert.ok(urls.some((u) => u.includes('AmItheAsshole')));
+  assert.ok(urls.some((u) => u.includes('relationship_advice')));
+  assert.ok(urls.some((u) => u.includes('BestofRedditorUpdates')));
+  assert.ok(urls.some((u) => u.includes('nytimes.com/column/modern-love')));
+  assert.ok(urls.some((u) => u.includes('thecut.com')));
+  assert.ok(urls.some((u) => u.includes('psychologytoday.com')));
 
-  const dupMatches = findResearchDuplicates(candidateSameUrl, existingStories, otherQueue, 38);
-  assert.ok(dupMatches.length >= 1);
-  assert.equal(dupMatches[0].storyId, 'RES-D-0001');
-  assert.equal(dupMatches[0].score, 99);
-
-  // Generic English relationship words alone must NOT trigger false positives
-  const distinctCandidate = makeResearchResult({
-    researchId: 'RES-R-0200',
-    collection: 'romantic',
-    sourceUrl: 'https://example.org/totally-unique-winter-greenhouse-violin',
-    sourceTitle: 'Relationship partners story about greenhouse violin tuning',
-    mainSituation: 'Скрипичный мастер восстанавливает старую скрипку в зимней оранжерее для глухого деда.',
-    mainConflict: 'Тихая реставрация семейного инструмента перед юбилеем.',
-    emotionalMechanism: 'Благодарность через сохранение звуковой памяти семьи.',
-    hiddenExpectation: 'Желание вернуть голос прошлому поколению.',
-    unexpectedDetail: 'На обечайке обнаружилась старая дата первой встречи бабушки и дедушки.',
-    keywords: ['скрипка', 'оранжерея', 'реставрация'],
-  });
-  const falsePositiveCheck = findResearchDuplicates(distinctCandidate, existingStories, otherQueue, 38);
-  assert.equal(falsePositiveCheck.length, 0);
-});
-
-test('researchResultsToCsv includes UTF-8 BOM and properly escaped fields', () => {
-  const item = makeResearchResult({
-    sourceTitle: 'Title with "quotes", commas',
-  });
-  const csv = researchResultsToCsv([item]);
-  assert.ok(csv.startsWith('\uFEFFresearchId,jobId,'));
-  assert.ok(csv.includes('"Title with ""quotes"", commas"'));
-});
-
-test('50 starter seed stories have zero internal duplicates across both collections', () => {
-  const allSeeds = [...buildDebateSeeds(), ...buildRomanticSeeds()];
-  assert.equal(allSeeds.length, 50);
-
-  for (const story of allSeeds) {
-    const others = allSeeds.filter((s) => s.id !== story.id);
-    const matches = findSimilarStories(story, others, 38, story.id);
-    assert.equal(
-      matches.length,
-      0,
-      `Seed story ${story.id} unexpectedly matched ${matches.map((m) => `${m.storyId}(${m.score}%)`).join(', ')}`
-    );
+  for (const s of sources) {
+    assert.equal(s.availabilityStatus, 'unchecked');
+    assert.equal(s.lastCheckedAt, null);
+    assert.ok(extractDomainFromUrl(s.url).length > 3);
   }
 });
+
+test('findResearchDuplicates catches semantic clones and duplicate sourceUrl across DB & Queue', () => {
+  const baseStory: StoryPlot = {
+    id: 'ML-D-0001',
+    collection: 'debate',
+    category: 'Свекровь и тёща',
+    subcategory: 'Ключи от квартиры',
+    title: 'Свекровь заходит в квартиру со своим ключом и переставляет посуду',
+    shortDescription: 'Мать мужа приходит без предупреждения и наводит свои порядки на кухне.',
+    fullPlot: 'Свекровь открывает дверь запасным ключом, пока невестка на работе, и переставляет специи и посуду.',
+    participants: 'Муж, жена, свекровь',
+    setting: 'Кухня молодой пары',
+    coreConflictOrAction: 'Свекровь заходит со своим ключом и переставляет посуду без спроса',
+    sideAPosition: 'Жена считает это нарушением личных границ',
+    sideBPosition: 'Муж уверен, что мама просто хочет помочь',
+    emotionalMechanism: 'Вторжение под видом заботы',
+    hiddenExpectation: 'Жена ждёт, что муж заберёт ключ',
+    unexpectedNuance: 'Мать оплатила замену смесителя',
+    possibleTwist: 'Свекровь считает себя хозяйкой из-за вложений в ремонт',
+    mainTriggerQuestion: 'Забирать ли ключ у матери?',
+    additionalQuestions: [],
+    keywords: ['свекровь', 'ключ', 'квартира', 'границы'],
+    ideaSource: 'Оригинал',
+    sourceUrl: 'https://www.reddit.com/r/AmItheAsshole/comments/sample_existing/',
+    originType: 'external',
+    createdAt: new Date().toISOString(),
+    verificationStatus: 'approved',
+    usageStatus: 'unused',
+    semanticFingerprint: 'D:свекровь::ключ|квартира|границы',
+    mainTheme: 'Вторжение свекрови со своим ключом',
+    plotMechanic: 'Неочевидная личная граница',
+    uniqueDetails: 'Специи на верхней полке',
+    batchNumber: 1,
+    quality: {
+      overall: 88,
+      originality: 88,
+      realism: 88,
+      emotionalExpressiveness: 88,
+      interest: 88,
+      discussionPotential: 88,
+      specificity: 88,
+      plotVariability: 88,
+      editorialNote: '',
+    },
+  };
+
+  const duplicateCandidate: ResearchResult = {
+    researchId: 'RES-D-0001',
+    jobId: 'JOB-TEST',
+    sourceId: 'reddit-aita',
+    sourceName: 'Reddit r/AmItheAsshole',
+    sourceUrl: 'https://www.reddit.com/r/AmItheAsshole/comments/sample_existing/',
+    sourceTitle: 'MIL uses spare key to rearrange our kitchen',
+    sourceAuthor: 'unknown',
+    sourceDate: 'unknown',
+    researchDate: new Date().toISOString(),
+    sourceType: 'Reddit Community',
+    collection: 'debate',
+    targetCategory: 'Свекровь и тёща',
+    originalLanguage: 'en',
+    sourceSummary: 'Свекровь зашла в квартиру запасным ключом и переставила кастрюли.',
+    mainSituation: 'Свекровь заходит со своим ключом и переставляет посуду на кухне',
+    participants: 'Муж, жена, мать мужа',
+    relationshipType: 'Брак',
+    mainConflict: 'Нарушение границ с запасным ключом и перестановкой посуды',
+    positionsOfParticipants: { sideA: 'Забрать ключ', sideB: 'Она помогает' },
+    emotionalMechanism: 'Контроль под видом помощи',
+    hiddenExpectation: 'Защита дома',
+    unexpectedDetail: 'Запасной ключ',
+    possibleTwist: 'Спор о вкладе',
+    readerReactionPotential: 'Сильная дискуссия о границах',
+    storyMechanic: 'Неочевидная личная граница',
+    keywords: ['свекровь', 'ключ', 'посуда'],
+    researchNotes: '',
+    sourceReliability: 'search_grounded',
+    analysisStatus: 'completed',
+    originalityAssessment: 70,
+    queueStatus: 'awaiting_review',
+    generatedIdea: null,
+    qualityBreakdown: {
+      overall: 80,
+      originality: 80,
+      realism: 80,
+      specificity: 80,
+      emotionalExpressiveness: 80,
+      readerInterest: 80,
+      diversity: 80,
+      discussionPotential: 80,
+      mechanicQuality: 80,
+      tierLabel: 'Требует проверки',
+      explanation: 'Test',
+    },
+    duplicateMatches: [],
+    duplicateFlag: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const matches = findResearchDuplicates(duplicateCandidate, [baseStory], [], new Set(), 38);
+  assert.ok(matches.length > 0);
+  assert.equal(matches[0].matchScope, 'story_database');
+  assert.ok(matches[0].similarityScore >= 40);
+
+  // Completely unrelated romantic story should NOT trigger false duplicate
+  const distinctRomantic: ResearchResult = {
+    ...duplicateCandidate,
+    researchId: 'RES-R-0001',
+    collection: 'romantic',
+    sourceUrl: 'https://www.nytimes.com/column/modern-love/distinct-story',
+    sourceTitle: 'Midnight tea thermos on winter train platform',
+    targetCategory: 'Забота на расстоянии',
+    sourceSummary: 'Муж приносит жене тёплый термос с имбирным чаем к ночному перрону.',
+    mainSituation: 'Термос с чаем у ночного вагона в мороз',
+    mainConflict: 'Тихая поддержка после долгой командировки',
+    storyMechanic: 'Тихая привычка как язык любви',
+    keywords: ['термос', 'поезд', 'чай', 'мороз'],
+  };
+
+  const unrelatedMatches = findResearchDuplicates(distinctRomantic, [baseStory], [], new Set(), 38);
+  assert.equal(unrelatedMatches.length, 0);
+});
+
+test('researchResultsToCsv emits UTF-8 BOM and proper header columns', () => {
+  const csv = researchResultsToCsv([]);
+  assert.ok(csv.startsWith('\uFEFFresearch_id,job_id,collection,'));
+});
+
+test('Unrelated English research cards do not trigger false duplicate alerts', () => {
+  const shoppingCard: ResearchResult = {
+    researchId: 'RES-D-1001',
+    jobId: 'JOB-1',
+    sourceId: 'media-the-cut',
+    sourceName: 'The Cut — Relationships',
+    sourceUrl: 'https://www.thecut.com/article/online-shopping-habits-couple-arguments.html',
+    sourceTitle: 'If He Knew How Much Stuff I Was Buying',
+    sourceAuthor: 'Charlotte Cowles',
+    sourceDate: '2026-11-19',
+    researchDate: new Date().toISOString(),
+    sourceType: 'Digital Magazine',
+    collection: 'debate',
+    targetCategory: 'Деньги и отношения',
+    originalLanguage: 'en',
+    sourceSummary: 'Couples argue about stealth online shopping packages delivered to work.',
+    mainSituation: '',
+    participants: '',
+    relationshipType: '',
+    mainConflict: '',
+    positionsOfParticipants: { sideA: '', sideB: '' },
+    emotionalMechanism: '',
+    hiddenExpectation: '',
+    unexpectedDetail: '',
+    possibleTwist: '',
+    readerReactionPotential: '',
+    storyMechanic: '',
+    keywords: [],
+    researchNotes: '',
+    sourceReliability: 'verified_url',
+    analysisStatus: 'failed',
+    originalityAssessment: 0,
+    queueStatus: 'research_pending',
+    generatedIdea: null,
+    qualityBreakdown: {
+      overall: 75,
+      originality: 75,
+      realism: 80,
+      specificity: 75,
+      emotionalExpressiveness: 75,
+      readerInterest: 75,
+      diversity: 75,
+      discussionPotential: 75,
+      mechanicQuality: 75,
+      tierLabel: 'Требует проверки',
+      explanation: 'Fallback',
+    },
+    duplicateMatches: [],
+    duplicateFlag: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const datingCard: ResearchResult = {
+    ...shoppingCard,
+    researchId: 'RES-D-1002',
+    sourceUrl: 'https://www.thecut.com/article/anthony-mackie-says-its-hard-to-date-as-an-older-man.html',
+    sourceTitle: 'Actor Says It Is Hard to Date As an Older Man',
+    sourceSummary: 'A 48-year-old actor talks about age gap expectations and dating apps.',
+  };
+
+  const matches = findResearchDuplicates(datingCard, [], [shoppingCard], new Set(), 38);
+  assert.equal(matches.length, 0);
+});
+

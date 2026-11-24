@@ -1,137 +1,245 @@
 ================================================================================
-MELO_LOVE CONTENT FACTORY — ПОЛНАЯ СВОДКА ПРОЕКТА (ЭТАПЫ 1 + 2 + 3 + 4)
-Архитектура, реализованные модули, правила Telegram + Дзен, безопасность и запуск
+MELO_LOVE — СВОДКА ПРОЕКТА (ЭТАП 1 + ЭТАП 2)
+Техническая и функциональная документация для перехода к Этапу 3
 ================================================================================
 
-1. ОБЩАЯ КОНЦЕПЦИЯ И ЦЕЛЬ ПРОЕКТА
+1. ОБЩАЯ АРХИТЕКТУРА И СТЕК
 --------------------------------------------------------------------------------
-MELO_LOVE — full-stack content-engineering платформа полного цикла для
-создания жизненных публикаций о любви и отношениях для Telegram и Яндекс Дзена:
+MELO_LOVE — full-stack content-engineering платформа для накопления, проверки,
+дедупликации, зарубежного исследования и отбора сюжетных основ о любви и
+отношениях для последующей генерации публикаций (Яндекс Дзен и дальнейшие каналы).
 
-  [Этап 1: Сбор и дедупликация сюжетных основ (`ML-D-xxxx` / `ML-R-xxxx`)]
-        + [Этап 2: Зарубежное исследование (`RES-D-xxxx` / `RES-R-xxxx`)]
-        -> [Этап 3: Генератор текстов MELO_LOVE (`ML-P-D-xxxxxx` / `ML-P-R-xxxxxx`)]
-        -> [Этап 4: Content Studio + Telegram Bot API -> @zen_sync_bot (`PUB-D-xxxxxx` / `PUB-R-xxxxxx`)]
+Технологический стек:
+- Frontend: React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Motion.
+- Backend: Node.js + Express (единый сервер на порту 3000; в dev — `tsx server.ts`
+  с `vite.middlewares`, в prod — `NODE_ENV=production node server.ts` со
+  статикой `dist/`).
+- ИИ-интеграция: официальный серверный SDK `@google/genai` (^3.6.1), модель
+  `gemini-4-hydrogen`, опциональный инструмент `googleSearch` grounding. Ключ
+  `GEMINI_API_KEY` передаётся только на сервере через переменные окружения.
+- Хранилище: локальные файлы JSON в кодировке UTF-8 с атомарной записью (`.tmp`),
+  автоматическим резервным копированием и заложенной SQL-схемой для Supabase.
 
-Две независимые коллекции:
-- Коллекция A («Кто здесь прав?» / debate): неоднозначные жизненные ситуации
-  и конфликты, разделяющие читателей на два лагеря.
-- Коллекция B («Романтические истории» / romantic): конкретные жизненные сцены,
-  поступки и тёплые бытовые детали.
-Целевой масштаб базы сюжетов: 3000 уникальных записей (1500 + 1500).
+Целевой масштаб базы сюжетов: 3000 уникальных записей:
+- Коллекция A («Кто здесь прав?»): цель 1500 дискуссионных основ (`ML-D-xxxx`).
+- Коллекция B («Романтические истории»): цель 1500 жизненных сцен (`ML-R-xxxx`).
 
 
-2. ТЕХНОЛОГИЧЕСКИЙ СТЕК
+2. АКТУАЛЬНАЯ СТРУКТУРА ПРОЕКТА
 --------------------------------------------------------------------------------
-- Frontend: React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Motion, Vite 8.
-- Backend: Node.js + Express на едином порту 3000
-  (dev: `tsx server.ts` с `vite.middlewares`;
-   prod: `NODE_ENV=production node server.ts` со статикой `dist/`).
-- AI-интеграция: серверный SDK `@google/genai`, модель `gemini-4-hydrogen`
-  (Google Search Grounding на Этапах 1–2; `ThinkingLevel.LOW` на Этапах 3–4).
-- Хранилище: локальные JSON-файлы в `data/` с атомарной записью (`.tmp`) и
-  ротацией до 15 бэкапов на модуль + 6-табличная схема PostgreSQL для Supabase
-  (`supabase/schema.sql`).
-- Автоматизация: `.github/workflows/publishing-queue.yml` и скрипт
-  `scripts/run-publishing-queue.ts` (защищены от случайной отправки флагом
-  `TELEGRAM_AUTO_SEND_ENABLED == 'true'`).
+Корень:
+- server.ts                          — Express-сервер, инициализация хранилищ,
+                                       восстановление прерванных заданий и все
+                                       REST API маршруты Этапа 1 и Этапа 2.
+- MELO_LOVE_SUMMARY.txt              — настоящая сводка проекта.
+- tests/research.test.ts             — модульные автотесты Этапа 2 (node:test).
 
-
-3. ФАЙЛОВАЯ СТРУКТУРА ПРОЕКТА (ЭТАПЫ 1–4)
---------------------------------------------------------------------------------
-Корневые файлы:
-- server.ts                   — Express-сервер, восстановление прерванных задач
-                                всех этапов при старте, все REST API.
-- .env.example                — шаблон серверных переменных без секретов.
-- .gitignore                  — исключения (node_modules, dist, .env, backups).
-- MELO_LOVE_SUMMARY.txt       — полная техническая сводка проекта.
-- README.md                   — быстрый старт и команды проверки.
-
-Серверная часть (`server/`):
-- Этап 1: `storage.ts`, `seedDebate.ts`, `seedRomantic.ts`, `geminiBatch.ts`,
-  `zipBuilder.ts`.
-- Этап 2: `researchStorage.ts`, `researchSources.ts`, `researchAnalyzer.ts`,
-  `researchEngine.ts`.
-- Этап 3: `contentStorage.ts`, `voiceEngine.ts`, `contentGenerator.ts`,
-  `contentRoutes.ts`.
-- Этап 4:
-  * `publishingStorage.ts`    — хранение `data/publications.json`,
-                                `data/publishing_settings.json`,
-                                `data/publishing_logs.json`, 15 бэкапов в
-                                `data/publishing_backups/`, санитизация статусов
-                                секретов, подсчёт аналитики, перевод
-                                `StoryPlot.usageStatus` в `'published'` ТОЛЬКО
-                                при подтверждении `zen_delivery_verified`.
-  * `telegramPublisher.ts`    — валидация (идемпотентность, 3800 симв., 1024
-                                для caption с фото), Dry-Run и live-отправка в
-                                Telegram Bot API, маскировка токена во всех
-                                ошибках/логах, проверка подключения `getMe`/`getChat`.
-  * `studioAiAssistant.ts`    — серверные AI-инструменты Content Studio:
-                                5 вариантов заголовков (<=140 симв.), SEO-адаптация
-                                под Дзен, сокращение в лимит <=3800 симв., подбор
-                                3–5 хештегов.
-  * `supabaseMigration.ts`    — проверка ссылочной целостности между всеми 4
-                                модулями, обязательные бэкапы перед миграцией,
-                                генерация `supabase/schema.sql`, опциональный
-                                upsert в Supabase без удаления локальных JSON.
-  * `publishingRoutes.ts`     — REST API группы `/api/publishing/*`.
-
-База данных и CI/CD:
-- `supabase/schema.sql`       — DDL 6 таблиц (`melo_story_plots`,
-                                `melo_research_results`, `melo_content_drafts`,
-                                `melo_publications`, `melo_publishing_logs`,
-                                `melo_phrasebook`) с внешними ключами и индексами.
-- `scripts/run-publishing-queue.ts`
-- `.github/workflows/publishing-queue.yml`
+Серверные модули (`server/`):
+- server/storage.ts                  — хранилище основной базы (`melo_love_db.json`),
+                                       нормализация записей, расчёт метрик,
+                                       ротация до 15 бэкапов в `data/backups/`.
+- server/seedDebate.ts               — стартовые 25 дискуссионных сюжетов (партия #1).
+- server/seedRomantic.ts             — стартовые 25 романтических сюжетов (партия #31).
+- server/geminiBatch.ts              — пакетная генерация новых партий (Этап 1) с
+                                       передачей контекста базы и опциональным
+                                       `googleSearch` grounding.
+- server/researchStorage.ts          — хранилище модуля исследований (источники,
+                                       задания, карточки, бэкапы, статистика),
+                                       генератор ID (`RES-D-xxxx` / `RES-R-xxxx`).
+- server/researchSources.ts          — проверка `robots.txt` и HTTP-доступности,
+                                       корректное чтение открытых RSS/Atom-лент и
+                                       HTML-статей (без обхода auth/CAPTCHA/paywall).
+- server/researchAnalyzer.ts         — ИИ-анализ зарубежных находок, разделение
+                                       фактов источника и выводов модели, генерация
+                                       оригинальной русской сюжетной основы
+                                       (`originType: 'external'`), 100-балльная
+                                       оценка по рубрике. Таймаут запроса 25с и
+                                       быстрый выход при ошибках квоты 429/quota.
+- server/researchEngine.ts           — оркестратор фонового поиска, отмены заданий,
+                                       поэтапного сохранения карточек, повторного
+                                       анализа, дедупликации и переноса в базу.
+- server/zipBuilder.ts               — сборка полного ZIP-архива проекта + базы
+                                       без зависимостей для скачивания на GitHub.
 
 Общие модули и клиент (`src/`):
-- `src/shared/types.ts`       — типы Этапов 1–4.
-- `src/shared/categories.ts`, `src/shared/similarity.ts`, `src/shared/contentUtils.ts`.
-- `src/shared/publishingUtils.ts` — подсчёт символов (лимит 3800 / caption 1024 /
-                                заголовок Дзена 140), нормализация и проверка 3–5
-                                хештегов, редакционная диагностика, форматтеры
-                                Telegram/TXT/JSON.
-- `src/services/api.ts`       — типизированный клиент REST API (Этапы 1–4).
-- `src/App.tsx`               — 12 разделов навигации (включая `Content Studio`).
-- `src/components/StoryListView.tsx`, `StoryModal.tsx`, `BatchModal.tsx`,
-  `Sections.tsx`, `ForeignResearchSection.tsx`, `ResearchDetailModal.tsx`,
-  `StoryGeneratorSection.tsx`, `ContentStudioSection.tsx`.
+- src/shared/types.ts                — единые TypeScript-типы Этапа 1 и Этапа 2.
+- src/shared/categories.ts           — справочники категорий (45 debate / 44 romantic),
+                                       сюжетные механики и справочник площадок.
+- src/shared/similarity.ts           — двуязычный (RU/EN стоп-слова + русский
+                                       стемминг) алгоритм смысловой дедупликации,
+                                       расчёт качества, генератор CSV (UTF-8 BOM)
+                                       и SQL-схема `SUPABASE_SQL_SCHEMA`.
+- src/services/api.ts                — типизированный клиент REST API.
+- src/App.tsx                        — оболочка панели: сайдбар на 10 разделов и
+                                       верхняя панель запуска/прогресса.
+- src/components/StoryListView.tsx   — таблица/карточки коллекций с фильтрами.
+- src/components/StoryModal.tsx      — паспорт сюжета (26+ полей, включая
+                                       `researchId` и `researchNotes`), редактирование,
+                                       ручное создание и разрешение дублей.
+- src/components/BatchModal.tsx      — мастер пакетной генерации и приёмки (Этап 1).
+- src/components/Sections.tsx        — обзор, категории, справочник источников,
+                                       уникальность, аналитика качества, экспорт
+                                       (JSON/CSV/ZIP-архив для GitHub), настройки.
+- src/components/ForeignResearchSection.tsx — рабочий центр `FOREIGN RESEARCH` с
+                                              5 вкладками и live-поллингом заданий.
+- src/components/ResearchDetailModal.tsx    — детальная карточка исследования
+                                              (5 блоков) и управление очередью.
 
-Автотесты (`tests/`):
-- `tests/research.test.ts`    — модульные тесты Этапа 2.
-- `tests/content.test.ts`     — модульные тесты Этапа 3.
-- `tests/publishing.test.ts`  — модульные тесты Этапа 4.
 
-
-4. КРИТИЧЕСКИЕ ИНВАРИАНТЫ ЭТАПА 4 (TELEGRAM + @zen_sync_bot)
+3. ФАКТИЧЕСКОЕ СОСТОЯНИЕ ДАННЫХ НА ДИСКЕ (`data/`)
 --------------------------------------------------------------------------------
-1) Жёсткий безопасный лимит длины Telegram-поста: 3800 символов с пробелами
-   (при техническом потолке Bot API 4096 символов) с учётом заголовка, основного
-   текста, финального вопроса и 3–5 хештегов.
-   - Посты > 3800 символов НИКОГДА не разбиваются автоматически на 2 сообщения и
-     блокируются от автоотправки в Telegram (доступен экспорт TXT/JSON для ручной
-     публикации в Дзен-студии).
-   - Для постов с отметкой «с изображением (caption)» действует отдельный
-     жёсткий лимит 1024 символа.
-2) Правила официального бота Дзена `@zen_sync_bot`:
-   - Первое предложение сообщения (до 140 символов, оканчивающееся на `.`/`!`/`?`)
-     автоматически становится заголовком статьи в Дзене.
-   - Разметка Markdown/HTML из Telegram в Дзен не переносится — диагностика
-     предупреждает о raw-разметке и двойных пробелах.
-   - Бот не синхронизирует пересланные посты из других каналов — публикация
-     должна идти напрямую от имени привязанного публичного канала.
-3) Статусы и защита от дублей:
-   - `draft` -> `ready` -> `scheduled` -> `sending` -> `zen_delivery_unconfirmed`
-     -> `zen_delivery_verified` (или `failed`).
-   - Успешный ответ Telegram API (`message_id`) ставит `zen_delivery_unconfirmed`,
-     но НЕ `zen_delivery_verified`: Дзен подтверждается отдельно вручную или
-     источником подтверждения, и только тогда исходный `StoryPlot.usageStatus`
-     переводится в `'published'`.
-   - Повторная отправка с тем же `telegramMessageId` или в статусах
-     `sending`/`sent_to_telegram`/`zen_delivery_unconfirmed`/`zen_delivery_verified`
-     заблокирована на уровне backend.
-4) Безопасность секретов:
-   - `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `SUPABASE_URL`,
-     `SUPABASE_SERVICE_ROLE_KEY` используются только на сервере, маскируются при
-     логировании и никогда не передаются в клиентский бандл.
+1) `data/melo_love_db.json` (Основная база STORY DATABASE):
+   - Всего сюжетов: 50 (`debate`: 25, `romantic`: 25).
+   - Статусы проверки: `approved`: 46, `pending`: 3, `needs_revision`: 1,
+     `rejected`: 0.
+   - Статусы использования: `unused`: 50, `drafted`: 0, `published`: 0,
+     `archived`: 0.
+   - Дублей: 0. Средний балл качества: 90/100.
+   - Журнал партий: 2 записи (партия #1 и партия #31).
+   - Файл `data/pending_batch.json`: отсутствует (незавершённых партий Этапа 1 нет).
+   - Резервная копия перед Этапом 2:
+     `data/backups/melo_love_backup_2026-11-20T23-03-58-752Z.json`.
+
+2) `data/research_sources.json` (Каталог зарубежных источников):
+   - Всего 13 системных источников (7 сабреддитов Reddit + 6 медиа: NYT Modern Love,
+     The Cut, Psychology Today, HuffPost, YourTango, Brides), доступны добавление,
+     правка, вкл/выкл и удаление для пользовательских источников.
+   - Фактические результаты live-проверки `robots.txt` + HTTP:
+     * `available` (4): The Cut — Relationships, Psychology Today — Relationships,
+       HuffPost — Relationships, YourTango (HTTP 200, `robotsAllowed: true`).
+     * `restricted` (8): все 7 сабреддитов Reddit (`robots.txt` запрещает ботов) +
+       The New York Times — Modern Love (HTTP 403). Прямой парсинг не применяется;
+       возможен поиск только через `Google Search Grounding`.
+     * `unavailable` (1): Brides — Relationships (HTTP 402).
+
+3) `data/research_jobs.json`, `data/research_results.json`, `data/research_backups/`:
+   - Задания: 1 выполненное тестовое задание `JOB-MWPLJZ6V` (метод:
+     `direct_public_feed`).
+   - Карточки: 2 реальные статьи с `thecut.com` (`RES-D-0001` и `RES-D-0002`) с
+     настоящими URL, авторами, датами и выдержками текста; дублей: 0.
+     Обе карточки имеют `analysisStatus: 'failed'` и `queueStatus: 'research_pending'`
+     из-за временной ошибки модели Google API (`503 UNAVAILABLE`), без подделки
+     ИИ-полей — готовы к повторному анализу кнопкой в карточке.
+
+
+4. КАК РАБОТАЕТ ЭТАП 1 (STORY DATABASE GENERATOR)
+--------------------------------------------------------------------------------
+- Хранит сюжетные основы `StoryPlot` (26 обязательных полей + `mainTheme`,
+  `plotMechanic`, `uniqueDetails`, `sourceAnalysisNote`, `researchId`,
+  `researchNotes`, `quality`, `similarityMatches`, `duplicateFlag`).
+- Поддерживает ручное создание/редактирование сюжетов, массовую проверку на дубли
+  (`POST /api/uniqueness/rescan`), слияние дубликатов (`POST /api/stories/merge`),
+  пользовательские категории, импорт JSON и экспорт JSON/CSV/ZIP.
+- Пакетная генерация (`POST /api/batches/generate`) сохраняет черновик партии в
+  `data/pending_batch.json`; редактор проверяет, правит и подтверждает сюжеты
+  через `POST /api/batches/commit`, что исключает случайное засорение базы.
+
+
+5. КАК РАБОТАЕТ ЭТАП 2 (FOREIGN RESEARCH ENGINE)
+--------------------------------------------------------------------------------
+1) Проверка источников и гибридный поиск:
+   - Для открытых `robots.txt`-разрешённых источников (`available`) сервер читает
+     реальные RSS/Atom-ленты и редакционные HTML-индексы, извлекая очищенный от
+     меню и подписей к фото текст статьи, автора, дату и URL.
+   - Для оставшихся слотов или ограниченных площадок запускается `Google Search
+     Grounding` (`@google/genai`) с фиксацией реальных ссылок из `groundingChunks`.
+   - Запрещена генерация вымышленных URL, авторов, дат и цитат; при отказе
+     Gemini API сохраняются реальные факты источника с честным статусом ошибки.
+
+2) Аналитическая карточка, переосмысление и 100-балльная оценка:
+   - Разбор материала в структурированную карточку (разделение фактов источника
+     и выводов модели) + переосмысление в самостоятельную русскую сюжетную
+     заготовку (`originType: 'external'`, без дословного перевода и «вирусности»).
+   - Градация качества (0–100):
+     * 90–100: «Отличная идея»
+     * 85–89: «Хорошая идея»
+     * 75–84: «Требует проверки»
+     * <75: «Рекомендуется доработка или отклонение»
+
+3) Трёхконтурная дедупликация и 7-статусная очередь:
+   - Проверка совпадений по: (а) основной базе `STORY DATABASE`, (б) другим
+     карточкам `research_results.json`, (в) текущей партии, плюс 99% детектор
+     одинакового `sourceUrl`.
+   - 7 статусов очереди:
+     `research_pending` -> `analysis_completed` -> `idea_generated` ->
+     `duplicate_check` -> `awaiting_review` -> `approved_for_database` / `rejected`.
+   - При одобрении (`approve`) дубли блокируются HTTP 409 до явного решения
+     редактора; принятая идея попадает в `STORY DATABASE` с `originType: 'external'`,
+     `verificationStatus: 'pending'`, `usageStatus: 'unused'`, `sourceUrl`,
+     `researchId` и `researchNotes`.
+
+
+6. ПОЛНЫЙ СПИСОК REST API ЭНДПОИНТОВ
+--------------------------------------------------------------------------------
+Этап 1 (STORY DATABASE & EXPORT):
+- GET    /api/database
+- POST   /api/stories/check-similarity
+- POST   /api/stories
+- PUT    /api/stories/:id
+- PATCH  /api/stories/:id/status
+- POST   /api/stories/merge
+- DELETE /api/stories/:id
+- POST   /api/uniqueness/rescan
+- POST   /api/batches/generate
+- PATCH  /api/batches/staged/:candidateId
+- POST   /api/batches/commit
+- DELETE /api/batches/staged
+- POST   /api/categories
+- PUT    /api/settings
+- POST   /api/backup
+- POST   /api/backup/restore
+- POST   /api/import
+- GET    /api/export/json
+- GET    /api/export/csv
+- GET    /api/export/archive
+
+Этап 2 (FOREIGN RESEARCH ENGINE):
+- GET    /api/research/statistics
+- GET    /api/research/sources
+- POST   /api/research/sources
+- PUT    /api/research/sources/:id
+- DELETE /api/research/sources/:id
+- POST   /api/research/sources/:id/check
+- POST   /api/research/sources/check-all
+- POST   /api/research/search
+- GET    /api/research/jobs
+- GET    /api/research/jobs/:id
+- POST   /api/research/jobs/:id/cancel
+- GET    /api/research/results
+- GET    /api/research/results/:id
+- PATCH  /api/research/results/:id
+- POST   /api/research/results/:id/analyze
+- POST   /api/research/results/:id/generate-idea
+- POST   /api/research/results/:id/check-duplicate
+- POST   /api/research/results/:id/approve
+- POST   /api/research/results/:id/reject
+- GET    /api/research/export/json
+- GET    /api/research/export/csv
+- POST   /api/research/backup
+
+
+7. ПРОВЕРКИ, ТЕКУЩИЕ ОГРАНИЧЕНИЯ И ГОТОВНОСТЬ К ЭТАПУ 3
+--------------------------------------------------------------------------------
+Проверенные метрики качества сборки:
+- `vite build` и `tsc --noEmit`: проходят без ошибок.
+- Автотесты `npx tsx --test tests/research.test.ts`: 5/5 пройдены успешно.
+
+Внешние ограничения среды:
+- Reddit ограничивает прямое чтение через `robots.txt`; NYT Modern Love возвращает
+  HTTP 403; Brides возвращает HTTP 402 — исследование с этих площадок опирается на
+  `Google Search Grounding` (требует активного `GEMINI_API_KEY` и доступности модели).
+- При временной перегрузке (`503`) или исчерпании квоты (`429`) Gemini API
+  найденные открытые материалы сохраняются как заготовки для последующего
+  повторного анализа.
+
+Точка стыковки для Этапа 3 (генерация публикаций / дальнейшие модули):
+- Готовые для отбора сюжеты выбираются из `data/melo_love_db.json` по фильтрам
+  `verificationStatus === 'approved'` и `usageStatus === 'unused'`.
+- Жизненный цикл использования уже поддержан в API (`PATCH /api/stories/:id/status`:
+  `unused` -> `drafted` -> `published` -> `archived`).
+- Все поля `StoryPlot` (`fullPlot`, `sideAPosition`, `sideBPosition`,
+  `emotionalMechanism`, `hiddenExpectation`, `unexpectedNuance`, `possibleTwist`,
+  `mainTriggerQuestion`, `additionalQuestions`, `researchId`, `sourceUrl`), а также
+  SQL-схема `public.melo_story_plots` и ZIP-экспорт проекта готовы к расширению на
+  Этапе 3 без переписывания существующих модулей.
 ================================================================================

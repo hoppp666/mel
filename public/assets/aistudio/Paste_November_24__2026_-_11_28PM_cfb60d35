@@ -1,0 +1,251 @@
+Run npm run lint
+
+> react-example@0.0.0 lint
+> tsc --noEmit
+
+Error: server.ts(14,3): error TS2305: Module '"./src/shared/similarity.js"' has no exported member 'calculateQualityScore'.
+Error: server.ts(20,3): error TS2305: Module '"./server/storage.js"' has no exported member 'buildSnapshotResponse'.
+Error: server.ts(23,3): error TS2305: Module '"./server/storage.js"' has no exported member 'loadPendingBatch'.
+Error: server.ts(24,3): error TS2305: Module '"./server/storage.js"' has no exported member 'nextBatchNumber'.
+Error: server.ts(25,3): error TS2305: Module '"./server/storage.js"' has no exported member 'nextStoryId'.
+Error: server.ts(27,3): error TS2305: Module '"./server/storage.js"' has no exported member 'restoreBackup'.
+Error: server.ts(29,3): error TS2305: Module '"./server/storage.js"' has no exported member 'savePendingBatch'.
+Error: server.ts(35,3): error TS2305: Module '"./server/researchStorage.js"' has no exported member 'createResearchBackup'.
+Error: server.ts(43,10): error TS2305: Module '"./server/researchSources.js"' has no exported member 'checkResearchSourceAvailability'.
+Error: server.ts(46,3): error TS2305: Module '"./server/researchEngine.js"' has no exported member 'cancelResearchJob'.
+Error: server.ts(47,3): error TS2305: Module '"./server/researchEngine.js"' has no exported member 'checkDuplicateForResult'.
+Error: server.ts(49,3): error TS2724: '"./server/researchEngine.js"' has no exported member named 'startResearchJob'. Did you mean 'startResearchJobAsync'?
+Error: server.ts(51,10): error TS2724: '"./server/contentStorage.js"' has no exported member named 'recoverInterruptedDrafts'. Did you mean 'recoverInterruptedContentDrafts'?
+Error: server.ts(52,10): error TS2305: Module '"./server/contentRoutes.js"' has no exported member 'createContentRouter'.
+Error: server.ts(94,7): error TS2554: Expected 2-3 arguments, but got 4.
+Error: server.ts(150,72): error TS2339: Property 'breakdown' does not exist on type 'QualityMetrics'.
+Error: server.ts(211,86): error TS2554: Expected 2-3 arguments, but got 4.
+Error: server.ts(242,9): error TS2353: Object literal may only specify known properties, and 'db' does not exist in type 'GenerateBatchParams'.
+Error: server.ts(261,47): error TS7006: Parameter 'c' implicitly has an 'any' type.
+Error: server.ts(316,7): error TS2353: Object literal may only specify known properties, and 'categoryFocus' does not exist in type 'BatchRecord'.
+Error: server.ts(342,25): error TS2339: Property 'push' does not exist on type '{ debate: string[]; romantic: string[]; }'.
+Error: server.ts(361,20): error TS2554: Expected 1 arguments, but got 0.
+Error: server.ts(447,24): error TS2554: Expected 1 arguments, but got 0.
+Error: server.ts(451,51): error TS2339: Property 'length' does not exist on type 'ArrayBufferLike'.
+  Property 'length' does not exist on type 'ArrayBuffer'.
+Error: server.ts(493,61): error TS2554: Expected 1 arguments, but got 2.
+Error: server.ts(497,51): error TS2339: Property 'length' does not exist on type 'ArrayBufferLike'.
+  Property 'length' does not exist on type 'ArrayBuffer'.
+Error: server.ts(506,28): error TS2554: Expected 3 arguments, but got 0.
+Error: server.ts(523,7): error TS2353: Object literal may only specify known properties, and 'rssUrl' does not exist in type 'ResearchSource'.
+Error: server.ts(560,16): error TS2339: Property 'isSystem' does not exist on type 'ResearchSource'.
+Error: server.ts(647,68): error TS2554: Expected 1 arguments, but got 2.
+Error: server.ts(657,68): error TS2554: Expected 1 arguments, but got 2.
+Error: server/autonomousScheduler.ts(3,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'AutonomousMonitoringSnapshot'.
+Error: server/autonomousScheduler.ts(4,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'AutonomousSchedulerConfig'.
+Error: server/autonomousScheduler.ts(6,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'GitHubWorkflowRunSummary'.
+Error: server/autonomousScheduler.ts(7,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'ProcessedMaterialEntry'.
+Error: server/autonomousScheduler.ts(8,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublicationItem'.
+Error: server/autonomousScheduler.ts(9,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'ResearchBatchRecord'.
+Error: server/autonomousScheduler.ts(11,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'SchedulerRunLog'.
+Error: server/autonomousScheduler.ts(15,3): error TS2305: Module '"../src/shared/similarity.js"' has no exported member 'calculateQualityScore'.
+Error: server/autonomousScheduler.ts(18,3): error TS2305: Module '"../src/shared/similarity.js"' has no exported member 'normalizeSourceUrl'.
+Error: server/autonomousScheduler.ts(31,3): error TS2305: Module '"./researchStorage.js"' has no exported member 'nextResearchId'.
+Error: server/autonomousScheduler.ts(38,3): error TS2305: Module '"./researchSources.js"' has no exported member 'checkResearchSourceAvailability'.
+Error: server/autonomousScheduler.ts(39,3): error TS2305: Module '"./researchSources.js"' has no exported member 'DiscoveredPublicArticle'.
+Error: server/autonomousScheduler.ts(40,3): error TS2305: Module '"./researchSources.js"' has no exported member 'fetchPublicArticlesFromSource'.
+Error: server/autonomousScheduler.ts(43,3): error TS2305: Module '"./researchAnalyzer.js"' has no exported member 'analyzeAndTransformResearchItem'.
+Error: server/autonomousScheduler.ts(44,3): error TS2305: Module '"./researchAnalyzer.js"' has no exported member 'searchForeignLeadsWithGrounding'.
+Error: server/autonomousScheduler.ts(47,29): error TS2724: '"./contentStorage.js"' has no exported member named 'recoverInterruptedDrafts'. Did you mean 'recoverInterruptedContentDrafts'?
+Error: server/autonomousScheduler.ts(48,10): error TS2724: '"./contentGenerator.js"' has no exported member named 'generatePublicationsFromStory'. Did you mean 'GeneratePublicationParams'?
+Error: server/autonomousScheduler.ts(173,5): error TS2322: Type 'string' is not assignable to type '{ sideA: string; sideB: string; }'.
+Error: server/autonomousScheduler.ts(182,5): error TS2322: Type '"verified_direct"' is not assignable to type 'SourceReliabilityStatus'.
+Error: server/autonomousScheduler.ts(184,5): error TS2322: Type 'string' is not assignable to type 'number'.
+Error: server/autonomousScheduler.ts(196,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'Set<string>'.
+Error: server/autonomousScheduler.ts(201,60): error TS2339: Property 'score' does not exist on type 'ResearchDuplicateMatch'.
+Error: server/autonomousScheduler.ts(201,91): error TS2339: Property 'storyId' does not exist on type 'ResearchDuplicateMatch'.
+Error: server/autonomousScheduler.ts(202,37): error TS2339: Property 'storyId' does not exist on type 'ResearchDuplicateMatch'.
+Error: server/autonomousScheduler.ts(214,44): error TS2339: Property 'score' does not exist on type 'SimilarityMatch'.
+Error: server/autonomousScheduler.ts(214,73): error TS2339: Property 'storyId' does not exist on type 'SimilarityMatch'.
+Error: server/autonomousScheduler.ts(215,35): error TS2339: Property 'storyId' does not exist on type 'SimilarityMatch'.
+Error: server/autonomousScheduler.ts(341,6): error TS7006: Parameter 'b' implicitly has an 'any' type.
+Error: server/autonomousScheduler.ts(342,28): error TS7006: Parameter 'b' implicitly has an 'any' type.
+Error: server/autonomousScheduler.ts(401,16): error TS18046: 'res' is of type 'unknown'.
+Error: server/autonomousScheduler.ts(402,28): error TS18046: 'res' is of type 'unknown'.
+Error: server/autonomousScheduler.ts(402,58): error TS2339: Property 'generatedPlot' does not exist on type 'ResearchResult'.
+Error: server/autonomousScheduler.ts(403,22): error TS18046: 'res' is of type 'unknown'.
+Error: server/autonomousScheduler.ts(405,26): error TS18046: 'res' is of type 'unknown'.
+Error: server/autonomousScheduler.ts(412,13): error TS2345: Argument of type 'number' is not assignable to parameter of type 'Set<string>'.
+Error: server/autonomousScheduler.ts(414,19): error TS2339: Property 'similarityMatches' does not exist on type 'ResearchResult'.
+Error: server/autonomousScheduler.ts(421,23): error TS2339: Property 'generatedPlot' does not exist on type 'ResearchResult'.
+Error: server/autonomousScheduler.ts(421,66): error TS18046: 'res' is of type 'unknown'.
+Error: server/autonomousScheduler.ts(424,61): error TS18048: 'approved.story' is possibly 'undefined'.
+Error: server/autonomousScheduler.ts(434,32): error TS18048: 'approved.story' is possibly 'undefined'.
+Error: server/autonomousScheduler.ts(467,32): error TS2339: Property 'defaultCollection' does not exist on type 'ResearchSource'.
+Error: server/autonomousScheduler.ts(467,66): error TS2339: Property 'defaultCollection' does not exist on type 'ResearchSource'.
+Error: server/autonomousScheduler.ts(470,24): error TS2339: Property 'status' does not exist on type 'ResearchSource'.
+Error: server/autonomousScheduler.ts(477,49): error TS2339: Property 'status' does not exist on type 'ResearchSource'.
+Error: server/autonomousScheduler.ts(531,22): error TS2740: Type '{ id: string; collection: any; sourceIds: any[]; categoryFocus: string; sourceLanguage: string; requestedCount: any; analysisDepth: 'standard'; transformMode: 'analyze_and_generate'; status: 'running'; ... 5 more ...; logs: string[]; }' is missing the following properties from type 'ResearchJob': sourceNames, category, ideasGeneratedCount, duplicatesDetectedCount, and 6 more.
+Error: server/autonomousScheduler.ts(603,7): error TS2322: Type 'string' is not assignable to type '{ sideA: string; sideB: string; }'.
+Error: server/autonomousScheduler.ts(612,7): error TS2322: Type '"verified_direct"' is not assignable to type 'SourceReliabilityStatus'.
+Error: server/autonomousScheduler.ts(614,7): error TS2322: Type 'string' is not assignable to type 'number'.
+Error: server/autonomousScheduler.ts(660,45): error TS18046: 'res' is of type 'unknown'.
+Error: server/autonomousScheduler.ts(661,30): error TS2339: Property 'generatedPlot' does not exist on type 'ResearchResult'.
+Error: server/autonomousScheduler.ts(661,46): error TS18046: 'res' is of type 'unknown'.
+Error: server/autonomousScheduler.ts(662,30): error TS2339: Property 'quality' does not exist on type 'ResearchResult'.
+Error: server/autonomousScheduler.ts(662,40): error TS18046: 'res' is of type 'unknown'.
+Error: server/autonomousScheduler.ts(664,44): error TS18046: 'res' is of type 'unknown'.
+Error: server/autonomousScheduler.ts(673,13): error TS2345: Argument of type 'number' is not assignable to parameter of type 'Set<string>'.
+Error: server/autonomousScheduler.ts(675,30): error TS2339: Property 'similarityMatches' does not exist on type 'ResearchResult'.
+Error: server/autonomousScheduler.ts(682,32): error TS2339: Property 'generatedPlot' does not exist on type 'ResearchResult'.
+Error: server/autonomousScheduler.ts(684,13): error TS18046: 'res' is of type 'unknown'.
+Error: server/autonomousScheduler.ts(688,61): error TS18048: 'approved.story' is possibly 'undefined'.
+Error: server/autonomousScheduler.ts(698,35): error TS18048: 'approved.story' is possibly 'undefined'.
+Error: server/autonomousScheduler.ts(739,21): error TS2339: Property 'failedCount' does not exist on type 'ResearchJob'.
+Error: server/autonomousScheduler.ts(740,21): error TS2339: Property 'finishedAt' does not exist on type 'ResearchJob'.
+Error: server/autonomousScheduler.ts(742,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'ResearchJobLogEntry'.
+Error: server/autonomousScheduler.ts(928,21): error TS18046: 'generated' is of type 'unknown'.
+Error: server/autonomousStorage.ts(4,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'AutonomousSchedulerConfig'.
+Error: server/autonomousStorage.ts(5,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'AutonomousSchedulerState'.
+Error: server/autonomousStorage.ts(6,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'ProcessedMaterialEntry'.
+Error: server/autonomousStorage.ts(7,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'ProcessedMaterialStatus'.
+Error: server/autonomousStorage.ts(9,10): error TS2305: Module '"./storage.js"' has no exported member 'atomicWriteJson'.
+Error: server/autonomousStorage.ts(9,27): error TS2459: Module '"./storage.js"' declares 'DATA_DIR' locally, but it is not exported.
+Error: server/autonomousStorage.ts(9,37): error TS2305: Module '"./storage.js"' has no exported member 'getDataDir'.
+Error: server/publishingRoutes.ts(3,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublicationItem'.
+Error: server/publishingRoutes.ts(4,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublicationRevision'.
+Error: server/publishingRoutes.ts(5,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublishingQueueStatus'.
+Error: server/publishingRoutes.ts(6,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublishingSettings'.
+Error: server/publishingRoutes.ts(84,30): error TS2339: Property 'contentId' does not exist on type 'ContentDraft'.
+Error: server/publishingRoutes.ts(94,55): error TS2339: Property 'subtitle' does not exist on type 'ContentDraft'.
+Error: server/publishingRoutes.ts(97,44): error TS2551: Property 'triggerQuestion' does not exist on type 'ContentDraft'. Did you mean 'mainTriggerQuestion'?
+Error: server/publishingRoutes.ts(110,37): error TS2339: Property 'contentId' does not exist on type 'ContentDraft'.
+Error: server/publishingRoutes.ts(154,105): error TS2339: Property 'contentId' does not exist on type 'ContentDraft'.
+Error: server/publishingRoutes.ts(285,50): error TS7006: Parameter 'r' implicitly has an 'any' type.
+Error: server/publishingStorage.ts(5,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublicationItem'.
+Error: server/publishingStorage.ts(6,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublishingAnalytics'.
+Error: server/publishingStorage.ts(7,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublishingLogEntry'.
+Error: server/publishingStorage.ts(8,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublishingQueueStatus'.
+Error: server/publishingStorage.ts(9,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublishingSettings'.
+Error: server/publishingStorage.ts(10,3): error TS2305: Module '"../src/shared/types.js"' has no exported member 'TelegramIntegrationStatus'.
+Error: server/publishingStorage.ts(12,10): error TS2305: Module '"./storage.js"' has no exported member 'atomicWriteJson'.
+Error: server/publishingStorage.ts(12,27): error TS2459: Module '"./storage.js"' declares 'DATA_DIR' locally, but it is not exported.
+Error: server/publishingStorage.ts(12,37): error TS2305: Module '"./storage.js"' has no exported member 'getDataDir'.
+Error: server/studioAiAssistant.ts(1,10): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublicationItem'.
+Error: server/studioAiAssistant.ts(3,10): error TS2305: Module '"../src/shared/contentUtils.js"' has no exported member 'cleanEditorialFormatting'.
+Error: server/supabaseMigration.ts(4,10): error TS2305: Module '"./researchStorage.js"' has no exported member 'createResearchBackup'.
+Error: server/supabaseMigration.ts(5,10): error TS2305: Module '"./contentStorage.js"' has no exported member 'createContentBackup'.
+Error: server/supabaseMigration.ts(176,48): error TS2339: Property 'contentId' does not exist on type 'ContentDraft'.
+Error: server/supabaseMigration.ts(182,23): error TS2339: Property 'contentId' does not exist on type 'ContentDraft'.
+Error: server/supabaseMigration.ts(215,48): error TS2339: Property 'contentId' does not exist on type 'ContentDraft'.
+Error: server/supabaseMigration.ts(236,15): error TS2554: Expected 1 arguments, but got 0.
+Error: server/supabaseMigration.ts(327,21): error TS2339: Property 'filename' does not exist on type 'string'.
+Error: server/telegramPublisher.ts(1,10): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublicationItem'.
+Error: server/telegramPublisher.ts(1,27): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublishingSettings'.
+Error: src/components/AutonomousSchedulerSection.tsx(16,3): error TS2305: Module '"../shared/types.js"' has no exported member 'AutonomousMonitoringSnapshot'.
+Error: src/components/AutonomousSchedulerSection.tsx(17,3): error TS2305: Module '"../shared/types.js"' has no exported member 'AutonomousSchedulerConfig'.
+Error: src/components/AutonomousSchedulerSection.tsx(18,3): error TS2305: Module '"../shared/types.js"' has no exported member 'ProcessedMaterialStatus'.
+Error: src/components/AutonomousSchedulerSection.tsx(21,3): error TS2305: Module '"../services/api.js"' has no exported member 'fetchAutonomousState'.
+Error: src/components/AutonomousSchedulerSection.tsx(22,3): error TS2305: Module '"../services/api.js"' has no exported member 'resumeAutonomousScheduler'.
+Error: src/components/AutonomousSchedulerSection.tsx(23,3): error TS2305: Module '"../services/api.js"' has no exported member 'runAutonomousFullCycleNow'.
+Error: src/components/AutonomousSchedulerSection.tsx(24,3): error TS2305: Module '"../services/api.js"' has no exported member 'runAutonomousProductionNow'.
+Error: src/components/AutonomousSchedulerSection.tsx(25,3): error TS2305: Module '"../services/api.js"' has no exported member 'runAutonomousPublishNow'.
+Error: src/components/AutonomousSchedulerSection.tsx(26,3): error TS2305: Module '"../services/api.js"' has no exported member 'runAutonomousResearchNow'.
+Error: src/components/AutonomousSchedulerSection.tsx(27,3): error TS2305: Module '"../services/api.js"' has no exported member 'stopAutonomousScheduler'.
+Error: src/components/AutonomousSchedulerSection.tsx(28,3): error TS2305: Module '"../services/api.js"' has no exported member 'updateAutonomousConfig'.
+Error: src/components/AutonomousSchedulerSection.tsx(91,44): error TS7006: Parameter 'e' implicitly has an 'any' type.
+Error: src/components/AutonomousSchedulerSection.tsx(99,36): error TS7006: Parameter 'b' implicitly has an 'any' type.
+Error: src/components/AutonomousSchedulerSection.tsx(476,44): error TS7006: Parameter 'run' implicitly has an 'any' type.
+Error: src/components/AutonomousSchedulerSection.tsx(531,57): error TS7006: Parameter 'r' implicitly has an 'any' type.
+Error: src/components/AutonomousSchedulerSection.tsx(598,42): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+Error: src/components/AutonomousSchedulerSection.tsx(659,37): error TS7006: Parameter 'b' implicitly has an 'any' type.
+Error: src/components/ContentStudioSection.tsx(24,3): error TS2305: Module '"../shared/types.js"' has no exported member 'PublicationItem'.
+Error: src/components/ContentStudioSection.tsx(25,3): error TS2305: Module '"../shared/types.js"' has no exported member 'PublishingAnalytics'.
+Error: src/components/ContentStudioSection.tsx(26,3): error TS2305: Module '"../shared/types.js"' has no exported member 'PublishingLogEntry'.
+Error: src/components/ContentStudioSection.tsx(27,3): error TS2305: Module '"../shared/types.js"' has no exported member 'PublishingQueueStatus'.
+Error: src/components/ContentStudioSection.tsx(28,3): error TS2305: Module '"../shared/types.js"' has no exported member 'PublishingSettings'.
+Error: src/components/ContentStudioSection.tsx(30,3): error TS2305: Module '"../shared/types.js"' has no exported member 'TelegramIntegrationStatus'.
+Error: src/components/ContentStudioSection.tsx(40,3): error TS2305: Module '"../services/api.js"' has no exported member 'confirmZenDelivery'.
+Error: src/components/ContentStudioSection.tsx(41,3): error TS2305: Module '"../services/api.js"' has no exported member 'createPublication'.
+Error: src/components/ContentStudioSection.tsx(42,3): error TS2305: Module '"../services/api.js"' has no exported member 'createPublishingBackupApi'.
+Error: src/components/ContentStudioSection.tsx(43,3): error TS2305: Module '"../services/api.js"' has no exported member 'deletePublication'.
+Error: src/components/ContentStudioSection.tsx(44,3): error TS2305: Module '"../services/api.js"' has no exported member 'fetchPublishingState'.
+Error: src/components/ContentStudioSection.tsx(45,3): error TS2305: Module '"../services/api.js"' has no exported member 'fetchSupabaseSchema'.
+Error: src/components/ContentStudioSection.tsx(46,3): error TS2305: Module '"../services/api.js"' has no exported member 'generatePublicationHeadlines'.
+Error: src/components/ContentStudioSection.tsx(47,3): error TS2305: Module '"../services/api.js"' has no exported member 'generatePublicationSeoProposal'.
+Error: src/components/ContentStudioSection.tsx(48,3): error TS2305: Module '"../services/api.js"' has no exported member 'generatePublicationShortenProposal'.
+Error: src/components/ContentStudioSection.tsx(49,3): error TS2305: Module '"../services/api.js"' has no exported member 'prepareOrRunSupabaseMigrationApi'.
+Error: src/components/ContentStudioSection.tsx(50,3): error TS2305: Module '"../services/api.js"' has no exported member 'processDuePublishingQueue'.
+Error: src/components/ContentStudioSection.tsx(51,3): error TS2305: Module '"../services/api.js"' has no exported member 'restorePublicationVersion'.
+Error: src/components/ContentStudioSection.tsx(52,3): error TS2305: Module '"../services/api.js"' has no exported member 'sendPublicationToTelegram'.
+Error: src/components/ContentStudioSection.tsx(53,3): error TS2305: Module '"../services/api.js"' has no exported member 'suggestPublicationHashtags'.
+Error: src/components/ContentStudioSection.tsx(54,3): error TS2305: Module '"../services/api.js"' has no exported member 'testTelegramConnectionApi'.
+Error: src/components/ContentStudioSection.tsx(55,3): error TS2305: Module '"../services/api.js"' has no exported member 'updatePublication'.
+Error: src/components/ContentStudioSection.tsx(56,3): error TS2305: Module '"../services/api.js"' has no exported member 'updatePublicationStatus'.
+Error: src/components/ContentStudioSection.tsx(57,3): error TS2305: Module '"../services/api.js"' has no exported member 'updatePublishingSettings'.
+Error: src/components/ContentStudioSection.tsx(407,36): error TS2339: Property 'contentId' does not exist on type 'ContentDraft'.
+Error: src/components/ContentStudioSection.tsx(407,56): error TS2339: Property 'contentId' does not exist on type 'ContentDraft'.
+Error: src/components/ContentStudioSection.tsx(408,26): error TS2339: Property 'contentId' does not exist on type 'ContentDraft'.
+Error: src/components/ContentStudioSection.tsx(408,53): error TS2339: Property 'quality' does not exist on type 'ContentDraft'.
+Error: src/components/ContentStudioSection.tsx(677,63): error TS7006: Parameter 'alt' implicitly has an 'any' type.
+Error: src/components/ContentStudioSection.tsx(677,68): error TS7006: Parameter 'i' implicitly has an 'any' type.
+Error: src/components/ContentStudioSection.tsx(886,65): error TS7006: Parameter 'n' implicitly has an 'any' type.
+Error: src/components/ContentStudioSection.tsx(886,68): error TS7006: Parameter 'i' implicitly has an 'any' type.
+Error: src/components/ContentStudioSection.tsx(996,69): error TS7006: Parameter 'rev' implicitly has an 'any' type.
+Error: src/components/ContentStudioSection.tsx(1088,35): error TS7006: Parameter 'e' implicitly has an 'any' type.
+Error: src/components/ContentStudioSection.tsx(1410,53): error TS7006: Parameter 'r' implicitly has an 'any' type.
+Error: src/shared/publishingUtils.ts(3,3): error TS2305: Module '"./types.js"' has no exported member 'EditorialCheckReport'.
+Error: src/shared/publishingUtils.ts(4,3): error TS2305: Module '"./types.js"' has no exported member 'PublicationItem'.
+Error: src/shared/publishingUtils.ts(8,3): error TS2305: Module '"./contentUtils.js"' has no exported member 'detectBannedAiCliches'.
+Error: src/shared/publishingUtils.ts(9,3): error TS2305: Module '"./contentUtils.js"' has no exported member 'detectBannedOpenings'.
+Error: src/shared/publishingUtils.ts(10,3): error TS2305: Module '"./contentUtils.js"' has no exported member 'detectFormattingViolations'.
+Error: src/shared/publishingUtils.ts(11,3): error TS2305: Module '"./contentUtils.js"' has no exported member 'detectRomanticCliches'.
+Error: tests/autonomous.test.ts(25,10): error TS2305: Module '"../server/storage.js"' has no exported member 'getDbPath'.
+Error: tests/autonomous.test.ts(25,49): error TS2305: Module '"../server/storage.js"' has no exported member 'setDataDirForTest'.
+Error: tests/autonomous.test.ts(27,3): error TS2305: Module '"../server/researchStorage.js"' has no exported member 'getResearchJobsPath'.
+Error: tests/autonomous.test.ts(28,3): error TS2305: Module '"../server/researchStorage.js"' has no exported member 'getResearchResultsPath'.
+Error: tests/autonomous.test.ts(29,3): error TS2305: Module '"../server/researchStorage.js"' has no exported member 'getResearchSourcesPath'.
+Error: tests/autonomous.test.ts(32,10): error TS2305: Module '"../server/contentStorage.js"' has no exported member 'getContentDraftsPath'.
+Error: tests/autonomous.test.ts(42,24): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublicationItem'.
+Error: tests/autonomous.test.ts(222,7): error TS2353: Object literal may only specify known properties, and 'contentId' does not exist in type 'ContentDraft'.
+Error: tests/autonomous.test.ts(310,29): error TS7031: Binding element 'item' implicitly has an 'any' type.
+Error: tests/autonomous.test.ts(346,29): error TS7031: Binding element 'item' implicitly has an 'any' type.
+Error: tests/autonomous.test.ts(423,29): error TS7031: Binding element 'item' implicitly has an 'any' type.
+Error: tests/autonomous.test.ts(458,29): error TS7031: Binding element 'item' implicitly has an 'any' type.
+Error: tests/autonomous.test.ts(483,29): error TS7031: Binding element 'item' implicitly has an 'any' type.
+Error: tests/autonomous.test.ts(529,29): error TS7031: Binding element 'item' implicitly has an 'any' type.
+Error: tests/autonomous.test.ts(609,29): error TS7031: Binding element 'item' implicitly has an 'any' type.
+Error: tests/content.test.ts(7,3): error TS2305: Module '"../src/shared/contentUtils.js"' has no exported member 'buildContentExportPayload'.
+Error: tests/content.test.ts(8,3): error TS2724: '"../src/shared/contentUtils.js"' has no exported member named 'calculateContentQuality'. Did you mean 'calculateContentQualityScore'?
+Error: tests/content.test.ts(9,3): error TS2305: Module '"../src/shared/contentUtils.js"' has no exported member 'cleanEditorialFormatting'.
+Error: tests/content.test.ts(11,3): error TS2305: Module '"../src/shared/contentUtils.js"' has no exported member 'detectBannedAiCliches'.
+Error: tests/content.test.ts(12,3): error TS2305: Module '"../src/shared/contentUtils.js"' has no exported member 'detectBannedOpenings'.
+Error: tests/content.test.ts(13,3): error TS2305: Module '"../src/shared/contentUtils.js"' has no exported member 'detectFormattingViolations'.
+Error: tests/content.test.ts(14,3): error TS2305: Module '"../src/shared/contentUtils.js"' has no exported member 'detectRomanticCliches'.
+Error: tests/content.test.ts(15,3): error TS2305: Module '"../src/shared/contentUtils.js"' has no exported member 'extractEndingPattern'.
+Error: tests/content.test.ts(16,3): error TS2305: Module '"../src/shared/contentUtils.js"' has no exported member 'extractOpeningPattern'.
+Error: tests/content.test.ts(17,3): error TS2305: Module '"../src/shared/contentUtils.js"' has no exported member 'hasVerbatimPlotCopy'.
+Error: tests/content.test.ts(20,10): error TS2305: Module '"../server/voiceEngine.js"' has no exported member 'buildVoiceSystemPrompt'.
+Error: tests/content.test.ts(22,10): error TS2305: Module '"../server/seedDebate.js"' has no exported member 'buildDebateSeeds'.
+Error: tests/content.test.ts(24,10): error TS2305: Module '"../server/storage.js"' has no exported member 'setDataDirForTest'.
+Error: tests/content.test.ts(98,18): error TS2339: Property 'debate' does not exist on type 'VoiceEngineConfig'.
+Error: tests/content.test.ts(132,5): error TS2353: Object literal may only specify known properties, and 'meaningNote' does not exist in type 'PhrasebookEntry'.
+Error: tests/content.test.ts(192,5): error TS2353: Object literal may only specify known properties, and 'contentId' does not exist in type 'ContentDraft'.
+Error: tests/publishing.test.ts(29,10): error TS2305: Module '"../server/storage.js"' has no exported member 'getDbPath'.
+Error: tests/publishing.test.ts(29,35): error TS2305: Module '"../server/storage.js"' has no exported member 'setDataDirForTest'.
+Error: tests/publishing.test.ts(44,24): error TS2305: Module '"../src/shared/types.js"' has no exported member 'PublicationItem'.
+Error: tests/publishing.test.ts(45,10): error TS2305: Module '"../server/seedDebate.js"' has no exported member 'buildDebateSeeds'.
+Error: tests/publishing.test.ts(304,5): error TS2353: Object literal may only specify known properties, and 'contentId' does not exist in type 'ContentDraft'.
+Error: tests/publishing.test.ts(361,33): error TS2339: Property 'contentId' does not exist on type 'ContentDraft'.
+Error: tests/research.test.ts(10,10): error TS2305: Module '"../src/shared/categories.js"' has no exported member 'DEFAULT_RESEARCH_SOURCES'.
+Error: tests/research.test.ts(12,10): error TS2305: Module '"../server/seedDebate.js"' has no exported member 'buildDebateSeeds'.
+Error: tests/research.test.ts(13,10): error TS2305: Module '"../server/seedRomantic.js"' has no exported member 'buildRomanticSeeds'.
+Error: tests/research.test.ts(35,5): error TS2322: Type 'string' is not assignable to type '{ sideA: string; sideB: string; }'.
+Error: tests/research.test.ts(44,5): error TS2322: Type '"verified_direct"' is not assignable to type 'SourceReliabilityStatus'.
+Error: tests/research.test.ts(46,5): error TS2322: Type 'string' is not assignable to type 'number'.
+Error: tests/research.test.ts(62,44): error TS2559: Type '"debate"' has no properties in common with type 'Partial<ResearchQualityBreakdown>'.
+Error: tests/research.test.ts(81,53): error TS7006: Parameter 's' implicitly has an 'any' type.
+Error: tests/research.test.ts(83,45): error TS7006: Parameter 's' implicitly has an 'any' type.
+Error: tests/research.test.ts(99,92): error TS2345: Argument of type 'number' is not assignable to parameter of type 'Set<string>'.
+Error: tests/research.test.ts(101,30): error TS2339: Property 'storyId' does not exist on type 'ResearchDuplicateMatch'.
+Error: tests/research.test.ts(102,30): error TS2339: Property 'score' does not exist on type 'ResearchDuplicateMatch'.
+Error: tests/research.test.ts(117,101): error TS2345: Argument of type 'number' is not assignable to parameter of type 'Set<string>'.
+Error: tests/research.test.ts(136,59): error TS2554: Expected 2-3 arguments, but got 4.
+Error: tests/research.test.ts(140,78): error TS2339: Property 'storyId' does not exist on type 'SimilarityMatch'.
+Error: tests/research.test.ts(140,91): error TS2339: Property 'score' does not exist on type 'SimilarityMatch'.
+Error: Process completed with exit code 1.

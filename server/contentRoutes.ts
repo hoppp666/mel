@@ -1342,3 +1342,10 @@ export function registerContentRoutes(app: Express): void {
     res.json({ filename, backups: listContentBackupSnapshots() });
   });
 }
+
+// --- Compatibility Exports ---
+export function createContentRouter(app: Express): Express {
+  registerContentRoutes(app);
+  return app;
+}
+
