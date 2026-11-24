@@ -1,102 +1,52 @@
-name: MELO_LOVE Autonomous Research & Content Pipeline
+- name: Setup Node.js
+    uses: actions/setup-node@v4
+    with:
+      node-version: '22'
 
-on:
-  schedule:
-    # Автоматический запуск каждые 4 часа (обеспечивает запас сюжетов под постинг раз в 2 часа)
-    - cron: '0 */4 * * *'
-  workflow_dispatch:
-    inputs:
-      mode:
-        description: 'Режим выполнения (full_cycle / research_only / produce_only / publish_only)'
-        required: false
-        default: 'full_cycle'
-        type: choice
-        options:
-          - full_cycle
-          - research_only
-          - produce_only
-          - publish_only
-      collection:
-        description: 'Рубрика для партии'
-        required: false
-        default: 'alternate'
-        type: choice
-        options:
-          - alternate
-          - debate
-          - romantic
-      dry_run:
-        description: 'Тестовый режим публикации (без реальной отправки в Telegram)'
-        required: false
-        default: false
-        type: boolean
+  - name: Install dependencies
+    run: |
+      if [ -f package-lock.json ]; then
+        npm ci --legacy-peer-deps
+      else
+        npm install --no-package-lock --no-audit --no-fund --legacy-peer-deps
+      fi
 
-# Защита от одновременного выполнения и повреждения JSON-базы
-concurrency:
-  group: melo-love-autonomous-data
-  cancel-in-progress: false
+  - name: Verify TypeScript & test suite
+    id: verify
+    run: |
+      npm run lint
+      npx tsx --test --test-concurrency=1 tests/research.test.ts tests/content.test.ts tests/publishing.test.ts tests/autonomous.test.ts
 
-permissions:
-  contents: write
+  - name: Run Autonomous Research & Production Cycle
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || '' }}
+      GIGACHAT_AUTH_KEY: ${{ secrets.GIGACHAT_AUTH_KEY || '' }}
+      GIGACHAT_SCOPE: ${{ secrets.GIGACHAT_SCOPE || 'GIGACHAT_API_PERS' }}
+      ZAI_API_KEY: ${{ secrets.ZAI_API_KEY || '' }}
+      ZAI_MODEL: ${{ vars.ZAI_MODEL || 'glm-4.7-flash' }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '' }}
+      TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID || '' }}
+      TELEGRAM_AUTO_SEND_ENABLED: ${{ vars.TELEGRAM_AUTO_SEND_ENABLED || secrets.TELEGRAM_AUTO_SEND_ENABLED || 'true' }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      AUTONOMOUS_MODE: ${{ github.event.inputs.mode || 'full_cycle' }}
+      AUTONOMOUS_COLLECTION: ${{ github.event.inputs.collection || 'alternate' }}
+      AUTONOMOUS_DRY_RUN: ${{ github.event.inputs.dry_run || '' }}
+    run: npx tsx scripts/run-autonomous-cycle.ts
 
-jobs:
-  autonomous-research-cycle:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --legacy-peer-deps
-          else
-            npm install --no-package-lock --no-audit --no-fund --legacy-peer-deps
-          fi
-
-      - name: Verify TypeScript & test suite
-        id: verify
-        run: |
-          npm run lint
-          npx tsx --test --test-concurrency=1 tests/research.test.ts tests/content.test.ts
-
-      - name: Run Autonomous Research & Production Cycle
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || '' }}
-          GIGACHAT_AUTH_KEY: ${{ secrets.GIGACHAT_AUTH_KEY || '' }}
-          GIGACHAT_SCOPE: ${{ secrets.GIGACHAT_SCOPE || 'GIGACHAT_API_PERS' }}
-          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY || '' }}
-          ZAI_MODEL: ${{ vars.ZAI_MODEL || 'glm-4.7-flash' }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '' }}
-          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID || '' }}
-          TELEGRAM_AUTO_SEND_ENABLED: ${{ vars.TELEGRAM_AUTO_SEND_ENABLED || secrets.TELEGRAM_AUTO_SEND_ENABLED || 'true' }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          AUTONOMOUS_MODE: ${{ github.event.inputs.mode || 'full_cycle' }}
-          AUTONOMOUS_COLLECTION: ${{ github.event.inputs.collection || 'alternate' }}
-          AUTONOMOUS_DRY_RUN: ${{ github.event.inputs.dry_run || '' }}
-        run: npx tsx scripts/run-autonomous-cycle.txt
-
-      - name: Commit and push updated JSON database ([skip ci])
-        if: ${{ !cancelled() && steps.verify.outcome == 'success' }}
-        run: |
-          git config user.name "melo-love-bot"
-          git config user.email "melo-love-bot@users.noreply.github.com"
-          git add data/*.json
-          if git diff --cached --quiet; then
-            echo "No JSON data changes to commit."
-            exit 0
-          fi
-          git commit -m "chore(melo-love): autonomous research & content update [skip ci]"
-          for attempt in 1 2 3; do
-            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
-            echo "Push conflict on attempt $attempt, retrying..."
-            sleep 3
-          done
-          exit 1
+  - name: Commit and push updated JSON database ([skip ci])
+    if: ${{ !cancelled() && steps.verify.outcome == 'success' }}
+    run: |
+      git config user.name "melo-love-bot"
+      git config user.email "melo-love-bot@users.noreply.github.com"
+      git add data/*.json
+      if git diff --cached --quiet; then
+        echo "No JSON data changes to commit."
+        exit 0
+      fi
+      git commit -m "chore(melo-love): autonomous research & content update [skip ci]"
+      for attempt in 1 2 3; do
+        git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+        echo "Push conflict on attempt $attempt, retrying..."
+        sleep 3
+      done
+      exit 1
