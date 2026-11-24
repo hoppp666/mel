@@ -8,7 +8,20 @@ import {
   VoiceConfig,
   VoicePreset,
 } from '../src/shared/types.js';
-import { atomicWriteJson, DATA_DIR, loadDatabase, saveDatabase } from './storage.js';
+import { atomicWriteJson, DATA_DIR, getDataDir, loadDatabase, saveDatabase } from './storage.js';
+
+export function getContentDraftsPath(): string {
+  return path.join(getDataDir(), 'content_drafts.json');
+}
+export function getContentVoicePath(): string {
+  return path.join(getDataDir(), 'content_voice_config.json');
+}
+export function getContentPhrasebookPath(): string {
+  return path.join(getDataDir(), 'content_phrasebook.json');
+}
+export function getContentBackupsDir(): string {
+  return path.join(getDataDir(), 'content_backups');
+}
 
 export const CONTENT_DRAFTS_PATH = path.join(DATA_DIR, 'content_drafts.json');
 export const CONTENT_VOICE_PATH = path.join(DATA_DIR, 'content_voice_config.json');
@@ -272,18 +285,19 @@ const DEFAULT_PHRASEBOOK: PhrasebookEntry[] = [
 ];
 
 export function ensureContentDirs(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.mkdirSync(CONTENT_BACKUPS_DIR, { recursive: true });
+  fs.mkdirSync(getDataDir(), { recursive: true });
+  fs.mkdirSync(getContentBackupsDir(), { recursive: true });
 }
 
 export function loadContentDrafts(): ContentDraft[] {
   ensureContentDirs();
-  if (!fs.existsSync(CONTENT_DRAFTS_PATH)) {
-    atomicWriteJson(CONTENT_DRAFTS_PATH, []);
+  const draftsPath = getContentDraftsPath();
+  if (!fs.existsSync(draftsPath)) {
+    atomicWriteJson(draftsPath, []);
     return [];
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(CONTENT_DRAFTS_PATH, 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(draftsPath, 'utf8'));
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -292,13 +306,14 @@ export function loadContentDrafts(): ContentDraft[] {
 
 export function saveContentDrafts(drafts: ContentDraft[]): void {
   ensureContentDirs();
-  atomicWriteJson(CONTENT_DRAFTS_PATH, drafts);
+  atomicWriteJson(getContentDraftsPath(), drafts);
   recalculatePhrasebookCounts(drafts);
 }
 
 export function loadVoiceConfig(): VoiceConfig {
   ensureContentDirs();
-  if (!fs.existsSync(CONTENT_VOICE_PATH)) {
+  const voicePath = getContentVoicePath();
+  if (!fs.existsSync(voicePath)) {
     const standard = SYSTEM_VOICE_PRESETS[0];
     const initial: VoiceConfig = {
       activePresetId: standard.id,
@@ -308,11 +323,11 @@ export function loadVoiceConfig(): VoiceConfig {
       minPublishQualityScore: 85,
       updatedAt: new Date().toISOString(),
     };
-    atomicWriteJson(CONTENT_VOICE_PATH, initial);
+    atomicWriteJson(voicePath, initial);
     return initial;
   }
   try {
-    return JSON.parse(fs.readFileSync(CONTENT_VOICE_PATH, 'utf8')) as VoiceConfig;
+    return JSON.parse(fs.readFileSync(voicePath, 'utf8')) as VoiceConfig;
   } catch {
     const standard = SYSTEM_VOICE_PRESETS[0];
     return {
@@ -329,18 +344,19 @@ export function loadVoiceConfig(): VoiceConfig {
 export function saveVoiceConfig(config: VoiceConfig): void {
   ensureContentDirs();
   config.updatedAt = new Date().toISOString();
-  atomicWriteJson(CONTENT_VOICE_PATH, config);
+  atomicWriteJson(getContentVoicePath(), config);
 }
 
 export function loadPhrasebook(): PhrasebookEntry[] {
   ensureContentDirs();
-  if (!fs.existsSync(CONTENT_PHRASEBOOK_PATH)) {
+  const phrasebookPath = getContentPhrasebookPath();
+  if (!fs.existsSync(phrasebookPath)) {
     const initial = DEFAULT_PHRASEBOOK.map((p) => ({ ...p }));
-    atomicWriteJson(CONTENT_PHRASEBOOK_PATH, initial);
+    atomicWriteJson(phrasebookPath, initial);
     return initial;
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(CONTENT_PHRASEBOOK_PATH, 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(phrasebookPath, 'utf8'));
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -349,7 +365,7 @@ export function loadPhrasebook(): PhrasebookEntry[] {
 
 export function savePhrasebook(entries: PhrasebookEntry[]): void {
   ensureContentDirs();
-  atomicWriteJson(CONTENT_PHRASEBOOK_PATH, entries);
+  atomicWriteJson(getContentPhrasebookPath(), entries);
 }
 
 export function recalculatePhrasebookCounts(drafts?: ContentDraft[]): PhrasebookEntry[] {
@@ -445,16 +461,17 @@ export function createContentBackup(): { filename: string; createdAt: string; dr
   };
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `content_backup_${stamp}.json`;
-  atomicWriteJson(path.join(CONTENT_BACKUPS_DIR, filename), payload);
+  const backupsDir = getContentBackupsDir();
+  atomicWriteJson(path.join(backupsDir, filename), payload);
 
   const files = fs
-    .readdirSync(CONTENT_BACKUPS_DIR)
+    .readdirSync(backupsDir)
     .filter((f) => f.endsWith('.json'))
     .sort()
     .reverse();
 
   for (const old of files.slice(15)) {
-    fs.unlinkSync(path.join(CONTENT_BACKUPS_DIR, old));
+    fs.unlinkSync(path.join(backupsDir, old));
   }
 
   return {

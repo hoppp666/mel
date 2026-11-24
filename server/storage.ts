@@ -18,6 +18,31 @@ import {
 import { buildDebateSeeds } from './seedDebate.js';
 import { buildRomanticSeeds } from './seedRomantic.js';
 
+let testDataDirOverride: string | null = null;
+
+export function getDataDir(): string {
+  if (testDataDirOverride) return testDataDirOverride;
+  return process.env.MELO_DATA_DIR
+    ? path.resolve(process.env.MELO_DATA_DIR)
+    : path.resolve(process.cwd(), 'data');
+}
+
+export function setDataDirForTest(dir: string | null): void {
+  testDataDirOverride = dir ? path.resolve(dir) : null;
+}
+
+export function getDbPath(): string {
+  return path.join(getDataDir(), 'melo_love_db.json');
+}
+
+export function getPendingBatchPath(): string {
+  return path.join(getDataDir(), 'pending_batch.json');
+}
+
+export function getBackupsDir(): string {
+  return path.join(getDataDir(), 'backups');
+}
+
 export const DATA_DIR = path.resolve(process.cwd(), 'data');
 export const DB_PATH = path.join(DATA_DIR, 'melo_love_db.json');
 export const PENDING_BATCH_PATH = path.join(DATA_DIR, 'pending_batch.json');
@@ -33,14 +58,14 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export function ensureDataDirs(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+  fs.mkdirSync(getDataDir(), { recursive: true });
+  fs.mkdirSync(getBackupsDir(), { recursive: true });
 }
 
 export function atomicWriteJson(filePath: string, payload: unknown): void {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
-  const tmpPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  const tmpPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 7)}.tmp`;
   fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2), 'utf8');
   fs.renameSync(tmpPath, filePath);
 }
@@ -154,12 +179,13 @@ function createInitialDatabase(): DatabaseFile {
 
 export function loadDatabase(): DatabaseFile {
   ensureDataDirs();
-  if (!fs.existsSync(DB_PATH)) {
+  const dbPath = getDbPath();
+  if (!fs.existsSync(dbPath)) {
     const initial = createInitialDatabase();
-    atomicWriteJson(DB_PATH, initial);
+    atomicWriteJson(dbPath, initial);
     return initial;
   }
-  const raw = fs.readFileSync(DB_PATH, 'utf8');
+  const raw = fs.readFileSync(dbPath, 'utf8');
   const parsed = JSON.parse(raw) as DatabaseFile;
   return {
     version: parsed.version || '1.0.0',
@@ -174,26 +200,27 @@ export function loadDatabase(): DatabaseFile {
 export function saveDatabase(db: DatabaseFile): void {
   ensureDataDirs();
   db.updatedAt = new Date().toISOString();
-  atomicWriteJson(DB_PATH, db);
+  atomicWriteJson(getDbPath(), db);
 }
 
 export function createBackupSnapshot(db?: DatabaseFile): BackupEntry {
   ensureDataDirs();
+  const backupsDir = getBackupsDir();
   const data = db || loadDatabase();
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `melo_love_backup_${stamp}.json`;
-  const target = path.join(BACKUPS_DIR, filename);
+  const target = path.join(backupsDir, filename);
   atomicWriteJson(target, data);
 
   // Rotate to max 15 backups
   const files = fs
-    .readdirSync(BACKUPS_DIR)
+    .readdirSync(backupsDir)
     .filter((f) => f.endsWith('.json'))
     .sort()
     .reverse();
 
   for (const old of files.slice(15)) {
-    fs.unlinkSync(path.join(BACKUPS_DIR, old));
+    fs.unlinkSync(path.join(backupsDir, old));
   }
 
   const stat = fs.statSync(target);
@@ -207,14 +234,15 @@ export function createBackupSnapshot(db?: DatabaseFile): BackupEntry {
 
 export function listBackups(): BackupEntry[] {
   ensureDataDirs();
+  const backupsDir = getBackupsDir();
   const files = fs
-    .readdirSync(BACKUPS_DIR)
+    .readdirSync(backupsDir)
     .filter((f) => f.endsWith('.json'))
     .sort()
     .reverse();
 
   return files.map((filename) => {
-    const full = path.join(BACKUPS_DIR, filename);
+    const full = path.join(backupsDir, filename);
     const stat = fs.statSync(full);
     let storyCount = 0;
     try {
@@ -235,7 +263,7 @@ export function listBackups(): BackupEntry[] {
 export function restoreBackup(filename: string): DatabaseFile {
   ensureDataDirs();
   const safeName = path.basename(filename);
-  const full = path.join(BACKUPS_DIR, safeName);
+  const full = path.join(getBackupsDir(), safeName);
   if (!fs.existsSync(full)) {
     throw new Error(`Снимок ${safeName} не найден`);
   }
@@ -248,9 +276,10 @@ export function restoreBackup(filename: string): DatabaseFile {
 
 export function loadPendingBatch(): PendingBatch | null {
   ensureDataDirs();
-  if (!fs.existsSync(PENDING_BATCH_PATH)) return null;
+  const pendingPath = getPendingBatchPath();
+  if (!fs.existsSync(pendingPath)) return null;
   try {
-    return JSON.parse(fs.readFileSync(PENDING_BATCH_PATH, 'utf8')) as PendingBatch;
+    return JSON.parse(fs.readFileSync(pendingPath, 'utf8')) as PendingBatch;
   } catch {
     return null;
   }
@@ -258,13 +287,14 @@ export function loadPendingBatch(): PendingBatch | null {
 
 export function savePendingBatch(batch: PendingBatch | null): void {
   ensureDataDirs();
+  const pendingPath = getPendingBatchPath();
   if (!batch) {
-    if (fs.existsSync(PENDING_BATCH_PATH)) {
-      fs.unlinkSync(PENDING_BATCH_PATH);
+    if (fs.existsSync(pendingPath)) {
+      fs.unlinkSync(pendingPath);
     }
     return;
   }
-  atomicWriteJson(PENDING_BATCH_PATH, batch);
+  atomicWriteJson(pendingPath, batch);
 }
 
 export function nextStoryId(stories: StoryPlot[], collection: CollectionType): string {

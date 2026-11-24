@@ -8,7 +8,20 @@ import {
   ResearchStatistics,
 } from '../src/shared/types.js';
 import { DEFAULT_RESEARCH_SOURCES } from '../src/shared/categories.js';
-import { atomicWriteJson, DATA_DIR } from './storage.js';
+import { atomicWriteJson, DATA_DIR, getDataDir } from './storage.js';
+
+export function getResearchSourcesPath(): string {
+  return path.join(getDataDir(), 'research_sources.json');
+}
+export function getResearchJobsPath(): string {
+  return path.join(getDataDir(), 'research_jobs.json');
+}
+export function getResearchResultsPath(): string {
+  return path.join(getDataDir(), 'research_results.json');
+}
+export function getResearchBackupsDir(): string {
+  return path.join(getDataDir(), 'research_backups');
+}
 
 export const RESEARCH_SOURCES_PATH = path.join(DATA_DIR, 'research_sources.json');
 export const RESEARCH_JOBS_PATH = path.join(DATA_DIR, 'research_jobs.json');
@@ -16,19 +29,20 @@ export const RESEARCH_RESULTS_PATH = path.join(DATA_DIR, 'research_results.json'
 export const RESEARCH_BACKUPS_DIR = path.join(DATA_DIR, 'research_backups');
 
 export function ensureResearchDirs(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.mkdirSync(RESEARCH_BACKUPS_DIR, { recursive: true });
+  fs.mkdirSync(getDataDir(), { recursive: true });
+  fs.mkdirSync(getResearchBackupsDir(), { recursive: true });
 }
 
 export function loadResearchSources(): ResearchSource[] {
   ensureResearchDirs();
-  if (!fs.existsSync(RESEARCH_SOURCES_PATH)) {
+  const sourcesPath = getResearchSourcesPath();
+  if (!fs.existsSync(sourcesPath)) {
     const initial = DEFAULT_RESEARCH_SOURCES.map((s) => ({ ...s }));
-    atomicWriteJson(RESEARCH_SOURCES_PATH, initial);
+    atomicWriteJson(sourcesPath, initial);
     return initial;
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(RESEARCH_SOURCES_PATH, 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(sourcesPath, 'utf8'));
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -37,17 +51,18 @@ export function loadResearchSources(): ResearchSource[] {
 
 export function saveResearchSources(sources: ResearchSource[]): void {
   ensureResearchDirs();
-  atomicWriteJson(RESEARCH_SOURCES_PATH, sources);
+  atomicWriteJson(getResearchSourcesPath(), sources);
 }
 
 export function loadResearchJobs(): ResearchJob[] {
   ensureResearchDirs();
-  if (!fs.existsSync(RESEARCH_JOBS_PATH)) {
-    atomicWriteJson(RESEARCH_JOBS_PATH, []);
+  const jobsPath = getResearchJobsPath();
+  if (!fs.existsSync(jobsPath)) {
+    atomicWriteJson(jobsPath, []);
     return [];
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(RESEARCH_JOBS_PATH, 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(jobsPath, 'utf8'));
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -56,17 +71,18 @@ export function loadResearchJobs(): ResearchJob[] {
 
 export function saveResearchJobs(jobs: ResearchJob[]): void {
   ensureResearchDirs();
-  atomicWriteJson(RESEARCH_JOBS_PATH, jobs);
+  atomicWriteJson(getResearchJobsPath(), jobs);
 }
 
 export function loadResearchResults(): ResearchResult[] {
   ensureResearchDirs();
-  if (!fs.existsSync(RESEARCH_RESULTS_PATH)) {
-    atomicWriteJson(RESEARCH_RESULTS_PATH, []);
+  const resultsPath = getResearchResultsPath();
+  if (!fs.existsSync(resultsPath)) {
+    atomicWriteJson(resultsPath, []);
     return [];
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(RESEARCH_RESULTS_PATH, 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -75,7 +91,7 @@ export function loadResearchResults(): ResearchResult[] {
 
 export function saveResearchResults(results: ResearchResult[]): void {
   ensureResearchDirs();
-  atomicWriteJson(RESEARCH_RESULTS_PATH, results);
+  atomicWriteJson(getResearchResultsPath(), results);
 }
 
 export function nextResearchId(results: ResearchResult[], collection: CollectionType): string {
@@ -116,16 +132,17 @@ export function createResearchBackup(): { filename: string; createdAt: string; r
   };
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `research_backup_${stamp}.json`;
-  atomicWriteJson(path.join(RESEARCH_BACKUPS_DIR, filename), payload);
+  const backupsDir = getResearchBackupsDir();
+  atomicWriteJson(path.join(backupsDir, filename), payload);
 
   const files = fs
-    .readdirSync(RESEARCH_BACKUPS_DIR)
+    .readdirSync(backupsDir)
     .filter((f) => f.endsWith('.json'))
     .sort()
     .reverse();
 
   for (const old of files.slice(15)) {
-    fs.unlinkSync(path.join(RESEARCH_BACKUPS_DIR, old));
+    fs.unlinkSync(path.join(backupsDir, old));
   }
 
   return {

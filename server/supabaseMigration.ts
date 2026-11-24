@@ -7,6 +7,7 @@ import {
   createPublishingBackup,
   loadPublications,
   loadPublishingLogs,
+  savePublications,
 } from './publishingStorage.js';
 
 export const FULL_SUPABASE_SCHEMA_SQL = `-- Полная схема MELO_LOVE (Этапы 1–4) для миграции в Supabase (PostgreSQL)
@@ -207,6 +208,25 @@ export function verifyAllDataIntegrity(): {
     },
     integrityErrors,
   };
+}
+
+export function repairOrphanedReferences(): { clearedDraftLinks: number } {
+  const drafts = loadContentDrafts();
+  const draftIds = new Set(drafts.map((d) => d.contentId));
+  const pubs = loadPublications();
+  let clearedDraftLinks = 0;
+
+  for (const p of pubs) {
+    if (p.sourceDraftId && !draftIds.has(p.sourceDraftId)) {
+      delete p.sourceDraftId;
+      clearedDraftLinks += 1;
+    }
+  }
+
+  if (clearedDraftLinks > 0) {
+    savePublications(pubs);
+  }
+  return { clearedDraftLinks };
 }
 
 export async function prepareOrRunSupabaseMigration(options?: {

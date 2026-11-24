@@ -28,6 +28,7 @@ import {
   syncStoryUsageStatus,
   SYSTEM_VOICE_PRESETS,
 } from './contentStorage.js';
+import { loadPublications, savePublications } from './publishingStorage.js';
 import {
   cancelContentGeneration,
   generatePublicationsFromStory,
@@ -331,6 +332,17 @@ export function createContentRouter(): Router {
 
     const filtered = drafts.filter((d) => d.contentId !== req.params.id);
     saveContentDrafts(filtered);
+
+    const pubs = loadPublications();
+    let pubsChanged = false;
+    for (const pub of pubs) {
+      if (pub.sourceDraftId === req.params.id) {
+        delete pub.sourceDraftId;
+        pubsChanged = true;
+      }
+    }
+    if (pubsChanged) savePublications(pubs);
+
     syncStoryUsageStatus(target.sourceStoryId);
     res.json({ deleted: true, metrics: computeContentMetrics() });
   });

@@ -9,7 +9,7 @@ import {
   PublishingSettings,
   TelegramIntegrationStatus,
 } from '../src/shared/types.js';
-import { atomicWriteJson, DATA_DIR, loadDatabase, saveDatabase } from './storage.js';
+import { atomicWriteJson, DATA_DIR, getDataDir, loadDatabase, saveDatabase } from './storage.js';
 import {
   measurePublicationLength,
   normalizeHashtagsList,
@@ -23,24 +23,38 @@ import {
   isZaiConfigured,
 } from './aiClient.js';
 
+export function getPublicationsPath(): string {
+  return path.join(getDataDir(), 'publications.json');
+}
+export function getPublishingSettingsPath(): string {
+  return path.join(getDataDir(), 'publishing_settings.json');
+}
+export function getPublishingLogsPath(): string {
+  return path.join(getDataDir(), 'publishing_logs.json');
+}
+export function getPublishingBackupsDir(): string {
+  return path.join(getDataDir(), 'publishing_backups');
+}
+
 export const PUBLICATIONS_PATH = path.join(DATA_DIR, 'publications.json');
 export const PUBLISHING_SETTINGS_PATH = path.join(DATA_DIR, 'publishing_settings.json');
 export const PUBLISHING_LOGS_PATH = path.join(DATA_DIR, 'publishing_logs.json');
 export const PUBLISHING_BACKUPS_DIR = path.join(DATA_DIR, 'publishing_backups');
 
 export function ensurePublishingDirs(): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.mkdirSync(PUBLISHING_BACKUPS_DIR, { recursive: true });
+  fs.mkdirSync(getDataDir(), { recursive: true });
+  fs.mkdirSync(getPublishingBackupsDir(), { recursive: true });
 }
 
 export function loadPublications(): PublicationItem[] {
   ensurePublishingDirs();
-  if (!fs.existsSync(PUBLICATIONS_PATH)) {
-    atomicWriteJson(PUBLICATIONS_PATH, []);
+  const pubsPath = getPublicationsPath();
+  if (!fs.existsSync(pubsPath)) {
+    atomicWriteJson(pubsPath, []);
     return [];
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(PUBLICATIONS_PATH, 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(pubsPath, 'utf8'));
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -49,11 +63,12 @@ export function loadPublications(): PublicationItem[] {
 
 export function savePublications(items: PublicationItem[]): void {
   ensurePublishingDirs();
-  atomicWriteJson(PUBLICATIONS_PATH, items);
+  atomicWriteJson(getPublicationsPath(), items);
 }
 
 export function loadPublishingSettings(): PublishingSettings {
   ensurePublishingDirs();
+  const settingsPath = getPublishingSettingsPath();
   const defaultSettings: PublishingSettings = {
     autoSendEnabled: process.env.TELEGRAM_AUTO_SEND_ENABLED === 'true',
     dryRunMode: process.env.TELEGRAM_AUTO_SEND_ENABLED !== 'true',
@@ -65,13 +80,13 @@ export function loadPublishingSettings(): PublishingSettings {
     updatedAt: new Date().toISOString(),
   };
 
-  if (!fs.existsSync(PUBLISHING_SETTINGS_PATH)) {
-    atomicWriteJson(PUBLISHING_SETTINGS_PATH, defaultSettings);
+  if (!fs.existsSync(settingsPath)) {
+    atomicWriteJson(settingsPath, defaultSettings);
     return defaultSettings;
   }
 
   try {
-    const parsed = JSON.parse(fs.readFileSync(PUBLISHING_SETTINGS_PATH, 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
     return { ...defaultSettings, ...parsed, safeTelegramCharLimit: TELEGRAM_SAFE_CHAR_LIMIT };
   } catch {
     return defaultSettings;
@@ -82,17 +97,18 @@ export function savePublishingSettings(settings: PublishingSettings): void {
   ensurePublishingDirs();
   settings.updatedAt = new Date().toISOString();
   settings.safeTelegramCharLimit = TELEGRAM_SAFE_CHAR_LIMIT;
-  atomicWriteJson(PUBLISHING_SETTINGS_PATH, settings);
+  atomicWriteJson(getPublishingSettingsPath(), settings);
 }
 
 export function loadPublishingLogs(): PublishingLogEntry[] {
   ensurePublishingDirs();
-  if (!fs.existsSync(PUBLISHING_LOGS_PATH)) {
-    atomicWriteJson(PUBLISHING_LOGS_PATH, []);
+  const logsPath = getPublishingLogsPath();
+  if (!fs.existsSync(logsPath)) {
+    atomicWriteJson(logsPath, []);
     return [];
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(PUBLISHING_LOGS_PATH, 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(logsPath, 'utf8'));
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -106,7 +122,7 @@ export function appendPublishingLog(entry: Omit<PublishingLogEntry, 'id' | 'crea
     ...entry,
     createdAt: new Date().toISOString(),
   });
-  atomicWriteJson(PUBLISHING_LOGS_PATH, logs.slice(0, 300));
+  atomicWriteJson(getPublishingLogsPath(), logs.slice(0, 300));
 }
 
 export function nextPublicationId(items: PublicationItem[], collection: CollectionType): string {
@@ -269,15 +285,16 @@ export function createPublishingBackup(): {
   };
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `publishing_backup_${stamp}.json`;
-  atomicWriteJson(path.join(PUBLISHING_BACKUPS_DIR, filename), payload);
+  const backupsDir = getPublishingBackupsDir();
+  atomicWriteJson(path.join(backupsDir, filename), payload);
 
   const files = fs
-    .readdirSync(PUBLISHING_BACKUPS_DIR)
+    .readdirSync(backupsDir)
     .filter((f) => f.endsWith('.json'))
     .sort()
     .reverse();
   for (const old of files.slice(15)) {
-    fs.unlinkSync(path.join(PUBLISHING_BACKUPS_DIR, old));
+    fs.unlinkSync(path.join(backupsDir, old));
   }
 
   return {

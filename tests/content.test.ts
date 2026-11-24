@@ -1,5 +1,8 @@
-import test from 'node:test';
+import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import {
   buildContentExportPayload,
   calculateContentQuality,
@@ -18,6 +21,21 @@ import { buildVoiceSystemPrompt } from '../server/voiceEngine.js';
 import { ContentDraft, PhrasebookEntry } from '../src/shared/types.js';
 import { buildDebateSeeds } from '../server/seedDebate.js';
 import { loadVoiceConfig } from '../server/contentStorage.js';
+import { setDataDirForTest } from '../server/storage.js';
+
+let tmpDataDir = '';
+
+before(() => {
+  tmpDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'melo-content-test-'));
+  setDataDirForTest(tmpDataDir);
+});
+
+after(() => {
+  setDataDirForTest(null);
+  if (tmpDataDir) {
+    fs.rmSync(tmpDataDir, { recursive: true, force: true });
+  }
+});
 
 test('countWords and opening/ending pattern extractors handle Russian punctuation cleanly', () => {
   const text =

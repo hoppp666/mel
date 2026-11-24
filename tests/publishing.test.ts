@@ -1,6 +1,8 @@
-import test from 'node:test';
+import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import {
   DZEN_HEADLINE_MAX_CHARS,
   formatPublicationForTelegram,
@@ -15,15 +17,17 @@ import {
   validateBeforeTelegramSend,
 } from '../server/telegramPublisher.js';
 import {
+  getPublicationsPath,
+  getPublishingLogsPath,
+  getPublishingSettingsPath,
   getTelegramIntegrationStatus,
   loadPublications,
   loadPublishingLogs,
-  PUBLICATIONS_PATH,
-  PUBLISHING_LOGS_PATH,
-  PUBLISHING_SETTINGS_PATH,
   recoverInterruptedPublications,
   savePublications,
 } from '../server/publishingStorage.js';
+import { getDbPath, loadDatabase, setDataDirForTest } from '../server/storage.js';
+import { saveContentDrafts } from '../server/contentStorage.js';
 import { getGeminiClient, isGeminiConfigured } from '../server/geminiClient.js';
 import {
   callChatCompletionJson,
@@ -34,10 +38,25 @@ import {
 } from '../server/aiClient.js';
 import {
   prepareOrRunSupabaseMigration,
+  repairOrphanedReferences,
   verifyAllDataIntegrity,
 } from '../server/supabaseMigration.js';
-import { PublicationItem } from '../src/shared/types.js';
+import { ContentDraft, PublicationItem } from '../src/shared/types.js';
 import { buildDebateSeeds } from '../server/seedDebate.js';
+
+let tmpDataDir = '';
+
+before(() => {
+  tmpDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'melo-publishing-test-'));
+  setDataDirForTest(tmpDataDir);
+});
+
+after(() => {
+  setDataDirForTest(null);
+  if (tmpDataDir) {
+    fs.rmSync(tmpDataDir, { recursive: true, force: true });
+  }
+});
 
 function makePublication(overrides: Partial<PublicationItem> = {}): PublicationItem {
   const story = buildDebateSeeds()[0];
@@ -181,9 +200,12 @@ test('validateBeforeTelegramSend blocks >3800 chars, >1024 image caption, and du
 });
 
 test('dispatchPublicationToTelegram handles dry-run, live send (-> zen_delivery_unconfirmed), token masking, and failure', async () => {
-  const snapPubs = snapshotFile(PUBLICATIONS_PATH);
-  const snapSettings = snapshotFile(PUBLISHING_SETTINGS_PATH);
-  const snapLogs = snapshotFile(PUBLISHING_LOGS_PATH);
+  const pubsPath = getPublicationsPath();
+  const settingsPath = getPublishingSettingsPath();
+  const logsPath = getPublishingLogsPath();
+  const snapPubs = snapshotFile(pubsPath);
+  const snapSettings = snapshotFile(settingsPath);
+  const snapLogs = snapshotFile(logsPath);
   const prevToken = process.env.TELEGRAM_BOT_TOKEN;
   const prevChannel = process.env.TELEGRAM_CHANNEL_ID;
 
@@ -250,15 +272,17 @@ test('dispatchPublicationToTelegram handles dry-run, live send (-> zen_delivery_
     else process.env.TELEGRAM_BOT_TOKEN = prevToken;
     if (prevChannel === undefined) delete process.env.TELEGRAM_CHANNEL_ID;
     else process.env.TELEGRAM_CHANNEL_ID = prevChannel;
-    restoreFile(PUBLICATIONS_PATH, snapPubs);
-    restoreFile(PUBLISHING_SETTINGS_PATH, snapSettings);
-    restoreFile(PUBLISHING_LOGS_PATH, snapLogs);
+    restoreFile(pubsPath, snapPubs);
+    restoreFile(settingsPath, snapSettings);
+    restoreFile(logsPath, snapLogs);
   }
 });
 
 test('recoverInterruptedPublications resets stale sending items to failed', () => {
-  const snapPubs = snapshotFile(PUBLICATIONS_PATH);
-  const snapSettings = snapshotFile(PUBLISHING_SETTINGS_PATH);
+  const pubsPath = getPublicationsPath();
+  const settingsPath = getPublishingSettingsPath();
+  const snapPubs = snapshotFile(pubsPath);
+  const snapSettings = snapshotFile(settingsPath);
   try {
     const stuck = makePublication({ publicationId: 'PUB-D-999201', status: 'sending' });
     savePublications([stuck]);
@@ -267,31 +291,110 @@ test('recoverInterruptedPublications resets stale sending items to failed', () =
     assert.equal(after.status, 'failed');
     assert.match(after.error || '', /прервана/i);
   } finally {
-    restoreFile(PUBLICATIONS_PATH, snapPubs);
-    restoreFile(PUBLISHING_SETTINGS_PATH, snapSettings);
+    restoreFile(pubsPath, snapPubs);
+    restoreFile(settingsPath, snapSettings);
   }
 });
 
 test('verifyAllDataIntegrity & prepareOrRunSupabaseMigration create 4-module backups without deleting local JSON', async () => {
+  const db = loadDatabase();
+  const story = db.stories[0];
+  const now = new Date().toISOString();
+  const validDraft: ContentDraft = {
+    contentId: 'ML-P-D-000001',
+    sourceStoryId: story.id,
+    collection: story.collection,
+    category: story.category,
+    subcategory: story.subcategory,
+    title: 'Проверка целостности базы',
+    subtitle: '',
+    body: 'Первый абзац истории.\n\nВторой абзац истории.',
+    triggerQuestion: 'Как бы вы поступили?',
+    wordCount: 6,
+    lengthPreset: 'standard',
+    narrativeStyle: 'action_start',
+    voicePresetId: 'melo-standard',
+    usedPhraseIds: [],
+    usedPhrases: [],
+    openingPattern: 'Первый абзац истории',
+    endingPattern: 'Второй абзац истории',
+    status: 'approved',
+    quality: {
+      overall: 88,
+      breakdown: {
+        hookStrength: 88,
+        languageNaturalness: 88,
+        emotionalImpact: 88,
+        plotDepth: 88,
+        narrativeUniqueness: 88,
+        voiceRecognition: 88,
+        endingQuality: 88,
+        sourceFidelity: 88,
+      },
+      penalties: {
+        hasMeaninglessRepetition: false,
+        soundsLikeAiTemplate: false,
+        artificialColloquialism: false,
+        phraseOveruse: false,
+        contradictsSource: false,
+        lostImportantDetail: false,
+        artificialEnding: false,
+        unsubstantiatedClaims: false,
+        verbatimCopy: false,
+        details: [],
+      },
+      editorialComment: 'OK',
+      passedThreshold: true,
+    },
+    autoRefined: false,
+    completenessAuditNote: 'OK',
+    originType: story.originType,
+    revisionHistory: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+  saveContentDrafts([validDraft]);
+  savePublications([
+    makePublication({
+      publicationId: 'PUB-D-000001',
+      sourceStoryId: story.id,
+      sourceDraftId: validDraft.contentId,
+    }),
+  ]);
+
   const integrity = verifyAllDataIntegrity();
-  assert.equal(integrity.integrityErrors.length, 0);
+  assert.deepEqual(integrity.integrityErrors, []);
   assert.ok(integrity.counts.stories >= 50);
+
+  // Verify repairOrphanedReferences clears deleted draft links cleanly
+  saveContentDrafts([]);
+  const beforeRepair = verifyAllDataIntegrity();
+  assert.equal(beforeRepair.integrityErrors.length, 1);
+  const repaired = repairOrphanedReferences();
+  assert.equal(repaired.clearedDraftLinks, 1);
+  const afterRepair = verifyAllDataIntegrity();
+  assert.deepEqual(afterRepair.integrityErrors, []);
 
   const report = await prepareOrRunSupabaseMigration({ executeLiveSync: false });
   assert.equal(report.ready, true);
-  assert.equal(report.integrityErrors.length, 0);
+  assert.deepEqual(report.integrityErrors, []);
   assert.ok(report.backupsCreated.database);
   assert.ok(report.backupsCreated.research);
   assert.ok(report.backupsCreated.content);
   assert.ok(report.backupsCreated.publishing);
-  assert.equal(fs.existsSync('data/melo_love_db.json'), true);
+  assert.equal(fs.existsSync(getDbPath()), true);
   assert.equal(fs.existsSync('supabase/schema.sql'), true);
+
+  savePublications([]);
 });
 
 test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, TELEGRAM_BOT_TOKEN, and SUPABASE_* are unset', async () => {
-  const snapPubs = snapshotFile(PUBLICATIONS_PATH);
-  const snapSettings = snapshotFile(PUBLISHING_SETTINGS_PATH);
-  const snapLogs = snapshotFile(PUBLISHING_LOGS_PATH);
+  const pubsPath = getPublicationsPath();
+  const settingsPath = getPublishingSettingsPath();
+  const logsPath = getPublishingLogsPath();
+  const snapPubs = snapshotFile(pubsPath);
+  const snapSettings = snapshotFile(settingsPath);
+  const snapLogs = snapshotFile(logsPath);
   const prevGemini = process.env.GEMINI_API_KEY;
   const prevGigaAuth = process.env.GIGACHAT_AUTH_KEY;
   const prevGigaCreds = process.env.GIGACHAT_CREDENTIALS;
@@ -398,9 +501,9 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
     else process.env.SUPABASE_URL = prevSupaUrl;
     if (prevSupaKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     else process.env.SUPABASE_SERVICE_ROLE_KEY = prevSupaKey;
-    restoreFile(PUBLICATIONS_PATH, snapPubs);
-    restoreFile(PUBLISHING_SETTINGS_PATH, snapSettings);
-    restoreFile(PUBLISHING_LOGS_PATH, snapLogs);
+    restoreFile(pubsPath, snapPubs);
+    restoreFile(settingsPath, snapSettings);
+    restoreFile(logsPath, snapLogs);
   }
 });
 

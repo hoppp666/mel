@@ -455,8 +455,14 @@ async function bootstrap() {
   app.get('/api/export/patch-archive', (_req, res) => {
     const patchFiles = [
       'server.ts',
-      'server/aiClient.ts',
+      'server/storage.ts',
+      'server/researchStorage.ts',
+      'server/contentStorage.ts',
+      'server/contentRoutes.ts',
       'server/publishingStorage.ts',
+      'server/autonomousStorage.ts',
+      'server/supabaseMigration.ts',
+      'server/aiClient.ts',
       'server/geminiClient.ts',
       'server/geminiBatch.ts',
       'server/researchEngine.ts',
@@ -472,6 +478,7 @@ async function bootstrap() {
       'src/services/api.ts',
       'data/content_phrasebook.json',
       '.github/workflows/melo-love-research.yml',
+      '.github/workflows/publishing-queue.yml',
       '.env.example',
       'README.md',
       'tests/autonomous.test.ts',

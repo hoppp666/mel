@@ -6,9 +6,16 @@ import {
   ProcessedMaterialEntry,
   ProcessedMaterialStatus,
 } from '../src/shared/types.js';
-import { atomicWriteJson, DATA_DIR } from './storage.js';
+import { atomicWriteJson, DATA_DIR, getDataDir } from './storage.js';
 import { loadResearchResults } from './researchStorage.js';
 import { loadPublications } from './publishingStorage.js';
+
+export function getProcessedRegistryPath(): string {
+  return path.join(getDataDir(), 'processed_materials_registry.json');
+}
+export function getAutonomousStatePath(): string {
+  return path.join(getDataDir(), 'autonomous_scheduler_state.json');
+}
 
 export const PROCESSED_REGISTRY_PATH = path.join(DATA_DIR, 'processed_materials_registry.json');
 export const AUTONOMOUS_STATE_PATH = path.join(DATA_DIR, 'autonomous_scheduler_state.json');
@@ -63,13 +70,14 @@ export function defaultAutonomousState(): AutonomousSchedulerState {
 }
 
 export function loadProcessedRegistry(): ProcessedMaterialEntry[] {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(PROCESSED_REGISTRY_PATH)) {
-    atomicWriteJson(PROCESSED_REGISTRY_PATH, []);
+  fs.mkdirSync(getDataDir(), { recursive: true });
+  const registryPath = getProcessedRegistryPath();
+  if (!fs.existsSync(registryPath)) {
+    atomicWriteJson(registryPath, []);
     return [];
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(PROCESSED_REGISTRY_PATH, 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -77,8 +85,8 @@ export function loadProcessedRegistry(): ProcessedMaterialEntry[] {
 }
 
 export function saveProcessedRegistry(entries: ProcessedMaterialEntry[]): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  atomicWriteJson(PROCESSED_REGISTRY_PATH, entries);
+  fs.mkdirSync(getDataDir(), { recursive: true });
+  atomicWriteJson(getProcessedRegistryPath(), entries);
 }
 
 export function nextRegistryId(entries: ProcessedMaterialEntry[]): string {
@@ -93,14 +101,15 @@ export function nextRegistryId(entries: ProcessedMaterialEntry[]): string {
 }
 
 export function loadAutonomousState(): AutonomousSchedulerState {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(getDataDir(), { recursive: true });
+  const statePath = getAutonomousStatePath();
   const def = defaultAutonomousState();
-  if (!fs.existsSync(AUTONOMOUS_STATE_PATH)) {
-    atomicWriteJson(AUTONOMOUS_STATE_PATH, def);
+  if (!fs.existsSync(statePath)) {
+    atomicWriteJson(statePath, def);
     return def;
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(AUTONOMOUS_STATE_PATH, 'utf8')) as Partial<AutonomousSchedulerState>;
+    const parsed = JSON.parse(fs.readFileSync(statePath, 'utf8')) as Partial<AutonomousSchedulerState>;
     const merged: AutonomousSchedulerState = {
       ...def,
       ...parsed,
@@ -125,7 +134,7 @@ export function loadAutonomousState(): AutonomousSchedulerState {
 }
 
 export function saveAutonomousState(state: AutonomousSchedulerState): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(getDataDir(), { recursive: true });
   const today = getTodayUtcDate();
   if (state.publishedTodayDate !== today) {
     state.publishedTodayDate = today;
@@ -133,7 +142,7 @@ export function saveAutonomousState(state: AutonomousSchedulerState): void {
   }
   state.batches = state.batches.slice(0, 60);
   state.runHistory = state.runHistory.slice(0, 40);
-  atomicWriteJson(AUTONOMOUS_STATE_PATH, state);
+  atomicWriteJson(getAutonomousStatePath(), state);
 }
 
 export function recoverAutonomousState(): void {

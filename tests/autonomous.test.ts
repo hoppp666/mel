@@ -1,6 +1,7 @@
-import test from 'node:test';
+import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import {
   buildMaterialContentFingerprint,
@@ -13,54 +14,66 @@ import {
   runFullAutonomousCycle,
 } from '../server/autonomousScheduler.js';
 import {
-  AUTONOMOUS_STATE_PATH,
+  getAutonomousStatePath,
+  getProcessedRegistryPath,
   loadAutonomousState,
   loadProcessedRegistry,
-  PROCESSED_REGISTRY_PATH,
   recoverAutonomousState,
   saveAutonomousState,
   saveProcessedRegistry,
 } from '../server/autonomousStorage.js';
-import { DB_PATH, loadDatabase, saveDatabase } from '../server/storage.js';
+import { getDbPath, loadDatabase, saveDatabase, setDataDirForTest } from '../server/storage.js';
 import {
-  loadResearchJobs,
+  getResearchJobsPath,
+  getResearchResultsPath,
+  getResearchSourcesPath,
   loadResearchResults,
-  RESEARCH_JOBS_PATH,
-  RESEARCH_RESULTS_PATH,
-  RESEARCH_SOURCES_PATH,
 } from '../server/researchStorage.js';
+import { getContentDraftsPath } from '../server/contentStorage.js';
 import {
-  CONTENT_DRAFTS_PATH,
-  loadContentDrafts,
-} from '../server/contentStorage.js';
-import {
+  getPublicationsPath,
+  getPublishingLogsPath,
+  getPublishingSettingsPath,
   loadPublications,
-  PUBLICATIONS_PATH,
-  PUBLISHING_LOGS_PATH,
-  PUBLISHING_SETTINGS_PATH,
+  loadPublishingSettings,
   savePublications,
   savePublishingSettings,
-  loadPublishingSettings,
 } from '../server/publishingStorage.js';
 import { ContentDraft, PublicationItem, ResearchResult } from '../src/shared/types.js';
 import { measurePublicationLength, TELEGRAM_SAFE_CHAR_LIMIT } from '../src/shared/publishingUtils.js';
 
-const ALL_DATA_PATHS = [
-  DB_PATH,
-  RESEARCH_RESULTS_PATH,
-  RESEARCH_JOBS_PATH,
-  RESEARCH_SOURCES_PATH,
-  CONTENT_DRAFTS_PATH,
-  PUBLICATIONS_PATH,
-  PUBLISHING_SETTINGS_PATH,
-  PUBLISHING_LOGS_PATH,
-  PROCESSED_REGISTRY_PATH,
-  AUTONOMOUS_STATE_PATH,
-];
+let tmpDataDir = '';
+
+before(() => {
+  tmpDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'melo-autonomous-test-'));
+  setDataDirForTest(tmpDataDir);
+});
+
+after(() => {
+  setDataDirForTest(null);
+  if (tmpDataDir) {
+    fs.rmSync(tmpDataDir, { recursive: true, force: true });
+  }
+});
+
+function getAllDataPaths(): string[] {
+  return [
+    getDbPath(),
+    getResearchResultsPath(),
+    getResearchJobsPath(),
+    getResearchSourcesPath(),
+    getContentDraftsPath(),
+    getPublicationsPath(),
+    getPublishingSettingsPath(),
+    getPublishingLogsPath(),
+    getProcessedRegistryPath(),
+    getAutonomousStatePath(),
+  ];
+}
 
 function snapshotAll(): Map<string, string | null> {
   const snap = new Map<string, string | null>();
-  for (const p of ALL_DATA_PATHS) {
+  for (const p of getAllDataPaths()) {
     snap.set(p, fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null);
   }
   return snap;
@@ -77,12 +90,14 @@ function restoreAll(snap: Map<string, string | null>): void {
 }
 
 function makeCleanEnvironment() {
-  if (fs.existsSync(PROCESSED_REGISTRY_PATH)) fs.unlinkSync(PROCESSED_REGISTRY_PATH);
-  if (fs.existsSync(AUTONOMOUS_STATE_PATH)) fs.unlinkSync(AUTONOMOUS_STATE_PATH);
-  fs.writeFileSync(RESEARCH_RESULTS_PATH, '[]', 'utf8');
-  fs.writeFileSync(RESEARCH_JOBS_PATH, '[]', 'utf8');
-  fs.writeFileSync(CONTENT_DRAFTS_PATH, '[]', 'utf8');
-  fs.writeFileSync(PUBLICATIONS_PATH, '[]', 'utf8');
+  const regPath = getProcessedRegistryPath();
+  const statePath = getAutonomousStatePath();
+  if (fs.existsSync(regPath)) fs.unlinkSync(regPath);
+  if (fs.existsSync(statePath)) fs.unlinkSync(statePath);
+  fs.writeFileSync(getResearchResultsPath(), '[]', 'utf8');
+  fs.writeFileSync(getResearchJobsPath(), '[]', 'utf8');
+  fs.writeFileSync(getContentDraftsPath(), '[]', 'utf8');
+  fs.writeFileSync(getPublicationsPath(), '[]', 'utf8');
 
   const db = loadDatabase();
   db.stories = db.stories.filter((s) => s.originType === 'original');
@@ -308,8 +323,8 @@ test('Scenario 1 & 2 & 10: First run creates registry/state; repeat run deduplic
     assert.equal(run1.storiesApproved, 2);
     assert.equal(analyzeCalls, 2);
 
-    assert.ok(fs.existsSync(PROCESSED_REGISTRY_PATH));
-    assert.ok(fs.existsSync(AUTONOMOUS_STATE_PATH));
+    assert.ok(fs.existsSync(getProcessedRegistryPath()));
+    assert.ok(fs.existsSync(getAutonomousStatePath()));
     const reg1 = loadProcessedRegistry();
     assert.equal(reg1.filter((e) => e.status === 'approved').length, 2);
 
