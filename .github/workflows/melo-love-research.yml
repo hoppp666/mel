@@ -62,9 +62,10 @@ jobs:
           fi
 
       - name: Verify TypeScript & test suite
+        id: verify
         run: |
           npm run lint
-          npx tsx --test tests/research.test.ts tests/content.test.ts tests/publishing.test.ts tests/autonomous.test.ts
+          npx tsx --test --test-concurrency=1 tests/research.test.ts tests/content.test.ts tests/publishing.test.ts tests/autonomous.test.ts
 
       - name: Run Autonomous Research & Production Cycle
         env:
@@ -83,7 +84,7 @@ jobs:
         run: npx tsx scripts/run-autonomous-cycle.ts
 
       - name: Commit and push updated JSON database ([skip ci])
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.verify.outcome == 'success' }}
         run: |
           git config user.name "melo-love-bot"
           git config user.email "melo-love-bot@users.noreply.github.com"
