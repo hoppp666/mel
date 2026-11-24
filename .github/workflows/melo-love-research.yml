@@ -71,6 +71,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || '' }}
           GIGACHAT_AUTH_KEY: ${{ secrets.GIGACHAT_AUTH_KEY || '' }}
           GIGACHAT_SCOPE: ${{ secrets.GIGACHAT_SCOPE || 'GIGACHAT_API_PERS' }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY || '' }}
+          ZAI_MODEL: ${{ vars.ZAI_MODEL || 'glm-4.7-flash' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '' }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID || '' }}
           TELEGRAM_AUTO_SEND_ENABLED: ${{ vars.TELEGRAM_AUTO_SEND_ENABLED || secrets.TELEGRAM_AUTO_SEND_ENABLED || 'true' }}
