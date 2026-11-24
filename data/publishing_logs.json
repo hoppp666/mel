@@ -1,5 +1,21 @@
 [
   {
+    "id": "PLOG-MWU4TN9L-MXRZ",
+    "publicationId": "PUB-D-999101",
+    "action": "telegram_sent",
+    "status": "zen_delivery_unconfirmed",
+    "detail": "Отправлено в Telegram (message_id=778899). Ожидает фактического подтверждения выхода в Дзене.",
+    "createdAt": "2026-11-24T03:25:31.785Z"
+  },
+  {
+    "id": "PLOG-MWU4TN98-3H08",
+    "publicationId": "PUB-D-999101",
+    "action": "dry_run_check",
+    "status": "ready",
+    "detail": "Тестовая проверка (без реальной отправки): 298/3800 симв. Статус не изменён.",
+    "createdAt": "2026-11-24T03:25:31.772Z"
+  },
+  {
     "id": "PLOG-MWU40HXB-H5BZ",
     "publicationId": "PUB-D-999301",
     "action": "telegram_sent",
