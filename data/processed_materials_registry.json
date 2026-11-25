@@ -44,11 +44,12 @@
     "collection": "debate",
     "discoveredAt": "2026-11-11T01:00:00.000Z",
     "contentFingerprint": "трекер|безопасност|превратившийс|слежк|неочевидн|личн|границ|превращ|инструмент|бытов|контрол|перемещен|наст|ждал|помощ|вечер|остановк|руслан|снимал|собственну|тревог|геолокац|включил|перв",
-    "status": "ready",
+    "status": "published_to_telegram",
     "storyId": "ML-D-0016",
-    "updatedAt": "2026-11-24T21:15:31.418Z",
+    "updatedAt": "2026-11-25T04:48:06.667Z",
     "contentId": "ML-P-D-000015",
-    "publicationId": "PUB-D-999302"
+    "publicationId": "PUB-D-999302",
+    "telegramMessageId": 21
   },
   {
     "id": "REG-000100",

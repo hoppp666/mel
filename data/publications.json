@@ -131,11 +131,14 @@
       "hashtagsOk": true,
       "notes": []
     },
-    "status": "ready",
+    "status": "zen_delivery_unconfirmed",
     "idempotencyKey": "PUB-D-999302-ML-D-0016",
     "revisionHistory": [],
     "createdAt": "2026-11-24T21:15:28.170Z",
-    "updatedAt": "2026-11-24T21:15:28.170Z"
+    "updatedAt": "2026-11-25T04:48:06.666Z",
+    "telegramMessageId": 21,
+    "telegramChatId": "-1004469313498",
+    "sentToTelegramAt": "2026-11-25T04:48:06.666Z"
   },
   {
     "publicationId": "PUB-D-999301",
