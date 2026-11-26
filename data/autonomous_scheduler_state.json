@@ -509,6 +509,23 @@
   "totalPublishedToTelegram": 15,
   "runHistory": [
     {
+      "runId": "RUN-MWXMWIBA",
+      "kind": "publish",
+      "mode": "github_actions",
+      "startedAt": "2026-11-26T14:14:56.949Z",
+      "finishedAt": "2026-11-26T14:14:56.950Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 0,
+      "summary": "В очереди нет готовых публикаций (status=ready/scheduled, <=3800 симв.)."
+    },
+    {
       "runId": "RUN-MWXDTZQE",
       "kind": "publish",
       "mode": "github_actions",
@@ -1180,30 +1197,13 @@
       "publicationsCreated": 3,
       "publishedToTelegram": 0,
       "summary": "Обработано сюжетов: 3, создано публикаций: 3."
-    },
-    {
-      "runId": "RUN-MWSCFFCZ",
-      "kind": "research",
-      "mode": "github_actions",
-      "startedAt": "2026-11-22T21:21:56.992Z",
-      "finishedAt": "2026-11-22T21:22:52.929Z",
-      "ok": true,
-      "discovered": 4,
-      "uniqueAdded": 4,
-      "duplicates": 0,
-      "analyzed": 4,
-      "pendingAnalysis": 0,
-      "storiesApproved": 0,
-      "publicationsCreated": 0,
-      "publishedToTelegram": 0,
-      "summary": "Партия RBATCH-0009 (debate): найдено 4, новых 4, дубликатов 0, проанализировано 4, в базу сюжетов 0."
     }
   ],
   "lastCollectionUsed": "romantic",
   "lastResearchRunAt": "2026-11-26T09:55:44.601Z",
   "lastProductionRunAt": "2026-11-26T10:01:03.007Z",
   "lastProductionError": "Ошибка Gemini API: Модель вернула неполную структуру публикации.",
-  "lastPublishRunAt": "2026-11-26T10:01:03.014Z",
+  "lastPublishRunAt": "2026-11-26T14:14:56.950Z",
   "nextScheduledPublishAt": "2026-11-26T06:49:29.160Z",
   "lastSuccessfulTelegramAt": "2026-11-26T04:49:29.160Z"
 }
