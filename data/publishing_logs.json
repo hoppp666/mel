@@ -1,5 +1,13 @@
 [
   {
+    "id": "PLOG-MWX1CVQK-DC5P",
+    "publicationId": "PUB-D-999101",
+    "action": "dry_run_check",
+    "status": "ready",
+    "detail": "Тестовая проверка (без реальной отправки): 298/3800 симв. Статус не изменён.",
+    "createdAt": "2026-11-26T04:11:49.292Z"
+  },
+  {
     "id": "PLOG-MWX0Y884-7GX0",
     "publicationId": "PUB-D-999101",
     "action": "dry_run_check",
