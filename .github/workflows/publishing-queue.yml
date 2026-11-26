@@ -46,6 +46,8 @@ jobs:
           TELEGRAM_AUTO_SEND_ENABLED: ${{ vars.TELEGRAM_AUTO_SEND_ENABLED || secrets.TELEGRAM_AUTO_SEND_ENABLED || 'true' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '' }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID || '' }}
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN || '' }}
+          VK_GROUP_ID: ${{ secrets.VK_GROUP_ID || '' }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: npx tsx scripts/run-publishing-queue.ts
 
