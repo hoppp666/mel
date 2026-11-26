@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     # Независимое расписание публикаций (раз в 2 часа, до 12 постов в сутки).
-    - cron: '0 */2 * * *'
+    - cron: '0 */4 * * *'
 
 # Единая блокировка с melo-love-research.yml для защиты JSON-базы от гонок
 concurrency:
