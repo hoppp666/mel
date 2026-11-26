@@ -69,6 +69,9 @@ jobs:
       - name: Run Autonomous Research & Production Cycle
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || '' }}
+          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 || '' }}
+          GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 || '' }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY || '' }}
           GIGACHAT_AUTH_KEY: ${{ secrets.GIGACHAT_AUTH_KEY || '' }}
           GIGACHAT_SCOPE: ${{ secrets.GIGACHAT_SCOPE || 'GIGACHAT_API_PERS' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '' }}
