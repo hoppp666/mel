@@ -3,7 +3,7 @@ name: MELO_LOVE Autonomous Research & Content Pipeline
 on:
   schedule:
     # Автоматический запуск каждые 4 часа (обеспечивает запас сюжетов под постинг раз в 2 часа)
-    - cron: '*/30 * * * *'
+    - cron: '0 */4 * * *'
   workflow_dispatch:
     inputs:
       mode:
