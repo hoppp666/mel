@@ -77,6 +77,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '' }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID || '' }}
           TELEGRAM_AUTO_SEND_ENABLED: ${{ vars.TELEGRAM_AUTO_SEND_ENABLED || secrets.TELEGRAM_AUTO_SEND_ENABLED || 'true' }}
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN || '' }}
+          VK_GROUP_ID: ${{ secrets.VK_GROUP_ID || '' }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           AUTONOMOUS_MODE: ${{ github.event.inputs.mode || 'full_cycle' }}
           AUTONOMOUS_COLLECTION: ${{ github.event.inputs.collection || 'alternate' }}
