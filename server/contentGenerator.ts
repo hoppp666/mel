@@ -71,82 +71,158 @@ interface GeminiDraftPayload {
   aiComment?: string;
 }
 
+function normalizeDraftPayload(raw: Record<string, unknown>): GeminiDraftPayload {
+  const source =
+    (raw.publication as Record<string, unknown>) ||
+    (raw.draft as Record<string, unknown>) ||
+    (raw.data as Record<string, unknown>) ||
+    raw;
+
+  const title = String(source.title ?? source.Title ?? source.headline ?? '').trim();
+  const subtitle = String(source.subtitle ?? source.Subtitle ?? '').trim();
+  const body = String(source.body ?? source.Body ?? source.text ?? source.content ?? '').trim();
+  const triggerQuestion = String(
+    source.triggerQuestion ?? source.trigger_question ?? source.question ?? ''
+  ).trim();
+
+  return {
+    title,
+    subtitle,
+    body,
+    triggerQuestion,
+    aiBreakdown: source.aiBreakdown as GeminiDraftPayload['aiBreakdown'],
+    aiPenalties: source.aiPenalties as GeminiDraftPayload['aiPenalties'],
+    aiComment: typeof source.aiComment === 'string' ? source.aiComment : undefined,
+  };
+}
+
 async function callGeminiForDraft(params: {
   systemInstruction: string;
   userPrompt: string;
   signal: AbortSignal;
 }): Promise<GeminiDraftPayload> {
-  try {
-    const responseSchema = {
-      type: Type.OBJECT,
-      properties: {
-        title: { type: Type.STRING },
-        subtitle: { type: Type.STRING },
-        body: { type: Type.STRING },
-        triggerQuestion: { type: Type.STRING },
-        aiComment: { type: Type.STRING },
-        aiBreakdown: {
-          type: Type.OBJECT,
-          properties: {
-            hookStrength: { type: Type.NUMBER },
-            languageNaturalness: { type: Type.NUMBER },
-            emotionalImpact: { type: Type.NUMBER },
-            plotDepth: { type: Type.NUMBER },
-            narrativeUniqueness: { type: Type.NUMBER },
-            voiceRecognition: { type: Type.NUMBER },
-            endingQuality: { type: Type.NUMBER },
-            sourceFidelity: { type: Type.NUMBER },
-          },
-        },
-        aiPenalties: {
-          type: Type.OBJECT,
-          properties: {
-            hasMeaninglessRepetition: { type: Type.BOOLEAN },
-            soundsLikeAiTemplate: { type: Type.BOOLEAN },
-            artificialColloquialism: { type: Type.BOOLEAN },
-            contradictsSource: { type: Type.BOOLEAN },
-            lostImportantDetail: { type: Type.BOOLEAN },
-            artificialEnding: { type: Type.BOOLEAN },
-            unsubstantiatedClaims: { type: Type.BOOLEAN },
-          },
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING },
+      subtitle: { type: Type.STRING },
+      body: { type: Type.STRING },
+      triggerQuestion: { type: Type.STRING },
+      aiComment: { type: Type.STRING },
+      aiBreakdown: {
+        type: Type.OBJECT,
+        properties: {
+          hookStrength: { type: Type.NUMBER },
+          languageNaturalness: { type: Type.NUMBER },
+          emotionalImpact: { type: Type.NUMBER },
+          plotDepth: { type: Type.NUMBER },
+          narrativeUniqueness: { type: Type.NUMBER },
+          voiceRecognition: { type: Type.NUMBER },
+          endingQuality: { type: Type.NUMBER },
+          sourceFidelity: { type: Type.NUMBER },
         },
       },
-      required: ['title', 'body', 'triggerQuestion'],
-    };
+      aiPenalties: {
+        type: Type.OBJECT,
+        properties: {
+          hasMeaninglessRepetition: { type: Type.BOOLEAN },
+          soundsLikeAiTemplate: { type: Type.BOOLEAN },
+          artificialColloquialism: { type: Type.BOOLEAN },
+          contradictsSource: { type: Type.BOOLEAN },
+          lostImportantDetail: { type: Type.BOOLEAN },
+          artificialEnding: { type: Type.BOOLEAN },
+          unsubstantiatedClaims: { type: Type.BOOLEAN },
+        },
+      },
+    },
+    required: ['title', 'body', 'triggerQuestion'],
+  };
 
-    const response = await runWithGeminiZaiFallback(
-      (ai) =>
-        withTimeout(
-          ai.models.generateContent({
-            model: GEMINI_MODEL,
-            contents: params.userPrompt,
-            config: {
-              systemInstruction: params.systemInstruction,
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-              responseMimeType: 'application/json',
-              responseSchema,
-            },
-          }),
-          40_000,
-          params.signal
-        ),
-      {
-        systemInstruction: params.systemInstruction,
-        userPrompt: params.userPrompt,
-        responseSchemaHint: responseSchema,
-        timeoutMs: 40_000,
-        signal: params.signal,
+  const zaiCleanSchemaExample = {
+    title: 'Яркий заголовок публикации (обязательное поле)',
+    subtitle: 'Короткий подзаголовок',
+    body: 'Основной текст истории (обязательное поле)',
+    triggerQuestion: 'Открытый вопрос к читателям в конце поста (обязательное поле)',
+    aiComment: 'Краткий комментарий самооценки текста',
+    aiBreakdown: {
+      hookStrength: 12,
+      languageNaturalness: 12,
+      emotionalImpact: 12,
+      plotDepth: 12,
+      narrativeUniqueness: 12,
+      voiceRecognition: 8,
+      endingQuality: 8,
+      sourceFidelity: 5,
+    },
+    aiPenalties: {
+      hasMeaninglessRepetition: false,
+      soundsLikeAiTemplate: false,
+      artificialColloquialism: false,
+      contradictsSource: false,
+      lostImportantDetail: false,
+      artificialEnding: false,
+      unsubstantiatedClaims: false,
+    },
+  };
+
+  const maxAttempts = 3;
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const attemptPrompt =
+        attempt === 1
+          ? params.userPrompt
+          : `${params.userPrompt}\n\nВАЖНО: В предыдущей попытке ответ не содержал обязательных полей "title", "body" и "triggerQuestion". Верни JSON строго со всеми тремя заполненными строковыми полями.`;
+
+      const response = await runWithGeminiZaiFallback(
+        (ai) =>
+          withTimeout(
+            ai.models.generateContent({
+              model: GEMINI_MODEL,
+              contents: attemptPrompt,
+              config: {
+                systemInstruction: params.systemInstruction,
+                thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+                responseMimeType: 'application/json',
+                responseSchema,
+              },
+            }),
+            40_000,
+            params.signal
+          ),
+        {
+          systemInstruction: params.systemInstruction,
+          userPrompt: attemptPrompt,
+          responseSchemaHint: zaiCleanSchemaExample,
+          timeoutMs: 40_000,
+          signal: params.signal,
+        }
+      );
+
+      const rawParsed = JSON.parse((response.text || '{}').trim()) as Record<string, unknown>;
+      const parsed = normalizeDraftPayload(rawParsed);
+
+      if (!parsed.title || !parsed.body) {
+        throw new Error(
+          `Модель вернула неполную структуру публикации (получены ключи: ${Object.keys(rawParsed).join(', ') || 'пусто'}).`
+        );
       }
-    );
 
-    const parsed = JSON.parse((response.text || '{}').trim()) as GeminiDraftPayload;
-    if (!parsed.title || !parsed.body) {
-      throw new Error('Модель вернула неполную структуру публикации.');
+      if (!parsed.triggerQuestion) {
+        parsed.triggerQuestion = 'А как бы вы поступили на месте героев этой истории?';
+      }
+
+      return parsed;
+    } catch (err) {
+      lastError = err;
+      if (params.signal.aborted || attempt === maxAttempts) {
+        break;
+      }
     }
-    return parsed;
-  } catch (err) {
-    throw formatGeminiError(err);
   }
+
+  throw formatGeminiError(lastError);
 }
 
 function buildStoryFactSheet(story: StoryPlot): string {
