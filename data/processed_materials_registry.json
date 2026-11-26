@@ -401,11 +401,12 @@
     "collection": "romantic",
     "discoveredAt": "2026-11-12T00:00:00.000Z",
     "contentFingerprint": "ежегодн|перечитыв|записок|счастливых|мелоч|бытов|ритуал|язык|любв|совместн|коллекциониров|маленьких|радост|котор|забыва|рутин|перв|год|игор|скептическ|отнесс|иде|трет|стал",
-    "status": "ready",
+    "status": "published_to_telegram",
     "storyId": "ML-R-0015",
-    "updatedAt": "2026-11-26T16:21:08.694Z",
+    "updatedAt": "2026-11-26T23:12:31.846Z",
     "contentId": "ML-P-R-000015",
-    "publicationId": "PUB-R-000005"
+    "publicationId": "PUB-R-000005",
+    "telegramMessageId": 31
   },
   {
     "id": "REG-000234",
