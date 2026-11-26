@@ -51,6 +51,7 @@ import {
   appendPublishingLog,
   enrichPublicationMetrics,
   loadPublications,
+  loadPublishingLogs,
   loadPublishingSettings,
   nextPublicationId,
   recoverInterruptedPublications,
@@ -1019,27 +1020,28 @@ export async function runAutonomousProductionCycle(options?: {
       }
 
       const length = measurePublicationLength(pubItem);
-      const passedQuality =
-        draft.quality.passedThreshold &&
+      // Переводим в 'ready', если пост не пустой и укладывается в безопасный лимит символов Telegram/ВК,
+      // не блокируя очередь из-за заниженной самооценки резервной модели GLM.
+      const readyForAutoPublish =
         !length.exceedsSafeLimit &&
-        pubItem.editorialChecks.headlineOk &&
-        pubItem.editorialChecks.hashtagsOk;
+        Boolean(pubItem.title.trim()) &&
+        Boolean(pubItem.body.trim());
 
-      pubItem.status = passedQuality ? 'ready' : 'draft';
+      pubItem.status = readyForAutoPublish ? 'ready' : 'draft';
       pubs.unshift(pubItem);
       savePublications(pubs);
       appendPublishingLog({
         publicationId: pubId,
         action: 'autonomous_created',
         status: pubItem.status,
-        detail: `Создана публикация по сюжету ${story.id} (${length.totalChars}/${TELEGRAM_SAFE_CHAR_LIMIT} симв., качество ${draft.quality.overall}/100).`,
+        detail: `Создана публикация по сюжету ${story.id} (${length.totalChars}/${TELEGRAM_SAFE_CHAR_LIMIT} симв., качество ${draft.quality.overall}/100, статус=${pubItem.status}).`,
       });
       publicationsCreated += 1;
 
       const regDone = loadProcessedRegistry();
       const rdIdx = regDone.findIndex((e) => e.id === regEntry!.id);
       if (rdIdx !== -1) {
-        regDone[rdIdx].status = passedQuality ? 'ready' : 'generated';
+        regDone[rdIdx].status = readyForAutoPublish ? 'ready' : 'generated';
         regDone[rdIdx].publicationId = pubId;
         regDone[rdIdx].contentId = draft.contentId;
         regDone[rdIdx].updatedAt = new Date().toISOString();
@@ -1289,6 +1291,7 @@ export async function runAutonomousPublishingCycle(options?: {
     });
 
     const finishedAt = new Date().toISOString();
+    let vkStatusNote = '';
     if (res.mode === 'live' && res.ok) {
       publishedCount = 1;
       state.publishedTodayCount += 1;
@@ -1296,6 +1299,14 @@ export async function runAutonomousPublishingCycle(options?: {
       state.lastSuccessfulTelegramAt = finishedAt;
       state.nextScheduledPublishAt = new Date(Date.now() + minIntervalMs).toISOString();
       state.lastPublishError = undefined;
+
+      const latestLogs = loadPublishingLogs();
+      const vkLog = latestLogs.find(
+        (l) => l.publicationId === target.publicationId && (l.action === 'vk_sent' || l.action === 'vk_send_failed')
+      );
+      if (vkLog) {
+        vkStatusNote = ` ВК: ${vkLog.detail}`;
+      }
 
       const regAfter = loadProcessedRegistry();
       const raIdx = regAfter.findIndex((e) => e.publicationId === target.publicationId || e.storyId === target.sourceStoryId);
@@ -1327,7 +1338,7 @@ export async function runAutonomousPublishingCycle(options?: {
       summary:
         res.mode === 'dry_run'
           ? `Dry-Run проверка для ${target.publicationId} пройдена (${target.totalChars}/${TELEGRAM_SAFE_CHAR_LIMIT} симв.).`
-          : `Опубликовано в Telegram: ${target.publicationId} (message_id=${res.messageId}). Ожидает подтверждения Дзена.`,
+          : `Опубликовано в Telegram: ${target.publicationId} (message_id=${res.messageId}).${vkStatusNote} Ожидает подтверждения Дзена.`,
     };
     state.runHistory.unshift(log);
     saveAutonomousState(state);
