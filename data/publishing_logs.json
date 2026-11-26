@@ -1,5 +1,29 @@
 [
   {
+    "id": "PLOG-MWXQI739-7LJ0",
+    "publicationId": "PUB-R-000003",
+    "action": "autonomous_created",
+    "status": "draft",
+    "detail": "Создана публикация по сюжету ML-R-0013 (1403/3800 симв., качество 72/100).",
+    "createdAt": "2026-11-26T15:55:47.685Z"
+  },
+  {
+    "id": "PLOG-MWXQGZ8V-0EOF",
+    "publicationId": "PUB-R-000002",
+    "action": "autonomous_created",
+    "status": "draft",
+    "detail": "Создана публикация по сюжету ML-R-0012 (1437/3800 симв., качество 72/100).",
+    "createdAt": "2026-11-26T15:54:50.863Z"
+  },
+  {
+    "id": "PLOG-MWXQFZFO-JBYR",
+    "publicationId": "PUB-D-999104",
+    "action": "autonomous_created",
+    "status": "draft",
+    "detail": "Создана публикация по сюжету ML-D-0022 (1043/3800 симв., качество 78/100).",
+    "createdAt": "2026-11-26T15:54:04.452Z"
+  },
+  {
     "id": "PLOG-MWXDRIO6-1NJM",
     "publicationId": "PUB-R-000001",
     "action": "autonomous_created",
