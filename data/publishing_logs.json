@@ -1,5 +1,13 @@
 [
   {
+    "id": "PLOG-MWXDRIO6-1NJM",
+    "publicationId": "PUB-R-000001",
+    "action": "autonomous_created",
+    "status": "draft",
+    "detail": "Создана публикация по сюжету ML-R-0011 (1299/3800 симв., качество 78/100).",
+    "createdAt": "2026-11-26T09:59:07.590Z"
+  },
+  {
     "id": "PLOG-MWX4A1RN-F7BB",
     "publicationId": "PUB-D-999103",
     "action": "autonomous_created",
