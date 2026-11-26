@@ -157,10 +157,12 @@ export function cleanZaiTextOutput(rawText: string): string {
 
 function buildZaiMessages(params: ZaiChatParams): Array<{ role: 'system' | 'user'; content: string }> {
   const jsonDemand =
-    'Ответ верни строго одним валидным JSON без markdown-обёрток ```json, без комментариев и без текста вне JSON.';
+    'Ответ верни строго одним валидным JSON-объектом без markdown-обёрток ```json, без комментариев и без текста вне JSON.';
   const schemaHint = params.responseSchemaHint
-    ? `\n\nОжидаемая схема JSON-ответа (соблюдай названия и типы полей): ${JSON.stringify(
-        params.responseSchemaHint
+    ? `\n\nПример ожидаемого JSON-ответа (соблюдай точные названия ключей и типы данных): ${JSON.stringify(
+        params.responseSchemaHint,
+        null,
+        2
       )}`
     : '';
   const systemParts = [params.systemInstruction?.trim(), jsonDemand].filter(Boolean);
@@ -245,6 +247,11 @@ async function performZaiChatRequest(params: ZaiChatParams): Promise<string> {
     max_tokens: params.maxTokens ?? 4096,
     stream: false,
   };
+
+  if (!params.expectArray) {
+    bodyObj.response_format = { type: 'json_object' };
+  }
+
   // Для серии GLM-4.5 отключаем режим рассуждений: быстрее и детерминированнее JSON.
   if (creds.model.toLowerCase().startsWith('glm-')) {
     bodyObj.thinking = { type: 'disabled' };
