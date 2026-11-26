@@ -1,3 +1,4 @@
+import { ThinkingLevel, Type } from '@google/genai';
 import {
   ContentDraft,
   ContentLengthPreset,
@@ -13,12 +14,13 @@ import {
   countWords,
   extractEndingPattern,
   extractOpeningPattern,
-  sanitizeKramarovskyDashes,
 } from '../src/shared/contentUtils.js';
 import {
-  callChatCompletionJson,
-  formatAiError,
-} from './aiClient.js';
+  formatGeminiError,
+  GEMINI_MODEL,
+  runWithGeminiZaiFallback,
+  withTimeout,
+} from './geminiClient.js';
 import {
   loadContentDrafts,
   loadPhrasebook,
@@ -51,7 +53,7 @@ export function cancelContentGeneration(): boolean {
   return false;
 }
 
-interface AiDraftPayload {
+interface GeminiDraftPayload {
   title: string;
   subtitle: string;
   body: string;
@@ -69,64 +71,81 @@ interface AiDraftPayload {
   aiComment?: string;
 }
 
-async function callAiForDraft(params: {
+async function callGeminiForDraft(params: {
   systemInstruction: string;
   userPrompt: string;
   signal: AbortSignal;
-}): Promise<AiDraftPayload> {
+}): Promise<GeminiDraftPayload> {
   try {
-    const jsonInstruction = `${params.userPrompt}
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING },
+        subtitle: { type: Type.STRING },
+        body: { type: Type.STRING },
+        triggerQuestion: { type: Type.STRING },
+        aiComment: { type: Type.STRING },
+        aiBreakdown: {
+          type: Type.OBJECT,
+          properties: {
+            hookStrength: { type: Type.NUMBER },
+            languageNaturalness: { type: Type.NUMBER },
+            emotionalImpact: { type: Type.NUMBER },
+            plotDepth: { type: Type.NUMBER },
+            narrativeUniqueness: { type: Type.NUMBER },
+            voiceRecognition: { type: Type.NUMBER },
+            endingQuality: { type: Type.NUMBER },
+            sourceFidelity: { type: Type.NUMBER },
+          },
+        },
+        aiPenalties: {
+          type: Type.OBJECT,
+          properties: {
+            hasMeaninglessRepetition: { type: Type.BOOLEAN },
+            soundsLikeAiTemplate: { type: Type.BOOLEAN },
+            artificialColloquialism: { type: Type.BOOLEAN },
+            contradictsSource: { type: Type.BOOLEAN },
+            lostImportantDetail: { type: Type.BOOLEAN },
+            artificialEnding: { type: Type.BOOLEAN },
+            unsubstantiatedClaims: { type: Type.BOOLEAN },
+          },
+        },
+      },
+      required: ['title', 'body', 'triggerQuestion'],
+    };
 
-Верни строго валидный JSON-объект (без пояснений вне JSON) со следующими полями:
-{
-  "title": "строка — цепляющий заголовок без длинных тире",
-  "subtitle": "строка — короткий анонс в 1 предложение",
-  "body": "строка — основной текст публикации с живыми абзацами через \\n\\n, БЕЗ единого длинного тире (—) или среднего тире (–)",
-  "triggerQuestion": "строка — сильный финальный вопрос к читателю",
-  "aiComment": "строка — короткий самоаудит редактора",
-  "aiBreakdown": {
-    "hookStrength": 0..15,
-    "languageNaturalness": 0..15,
-    "emotionalImpact": 0..15,
-    "plotDepth": 0..15,
-    "narrativeUniqueness": 0..15,
-    "voiceRecognition": 0..10,
-    "endingQuality": 0..10,
-    "sourceFidelity": 0..5
-  },
-  "aiPenalties": {
-    "hasMeaninglessRepetition": false,
-    "soundsLikeAiTemplate": false,
-    "artificialColloquialism": false,
-    "contradictsSource": false,
-    "lostImportantDetail": false,
-    "artificialEnding": false,
-    "unsubstantiatedClaims": false
-  }
-}`;
+    const response = await runWithGeminiZaiFallback(
+      (ai) =>
+        withTimeout(
+          ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: params.userPrompt,
+            config: {
+              systemInstruction: params.systemInstruction,
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: 'application/json',
+              responseSchema,
+            },
+          }),
+          40_000,
+          params.signal
+        ),
+      {
+        systemInstruction: params.systemInstruction,
+        userPrompt: params.userPrompt,
+        responseSchemaHint: responseSchema,
+        timeoutMs: 40_000,
+        signal: params.signal,
+      }
+    );
 
-    const parsed = await callChatCompletionJson<AiDraftPayload>({
-      systemInstruction: params.systemInstruction,
-      userPrompt: jsonInstruction,
-      temperature: 0.78,
-      maxTokens: 3200,
-      timeoutMs: 60_000,
-      signal: params.signal,
-    });
-
+    const parsed = JSON.parse((response.text || '{}').trim()) as GeminiDraftPayload;
     if (!parsed.title || !parsed.body) {
       throw new Error('Модель вернула неполную структуру публикации.');
     }
-
-    return {
-      ...parsed,
-      title: sanitizeKramarovskyDashes(String(parsed.title)),
-      subtitle: sanitizeKramarovskyDashes(String(parsed.subtitle || '')),
-      body: sanitizeKramarovskyDashes(String(parsed.body)),
-      triggerQuestion: sanitizeKramarovskyDashes(String(parsed.triggerQuestion || '')),
-    };
+    return parsed;
   } catch (err) {
-    throw formatAiError(err);
+    throw formatGeminiError(err);
   }
 }
 
@@ -234,7 +253,7 @@ ${
 }
 Напиши живую публикацию объёмом ${lengthMeta.minWords}–${lengthMeta.maxWords} слов, оцени её по рубрике (hookStrength 0-15, languageNaturalness 0-15, emotionalImpact 0-15, plotDepth 0-15, narrativeUniqueness 0-15, voiceRecognition 0-10, endingQuality 0-10, sourceFidelity 0-5) и верни JSON.`;
 
-      let payload = await callAiForDraft({
+      let payload = await callGeminiForDraft({
         systemInstruction,
         userPrompt,
         signal: controller.signal,
@@ -256,7 +275,6 @@ ${
 
       let autoRefined = false;
       if (quality.overall < voiceConfig.minPublishQualityScore && !controller.signal.aborted) {
-        // Single targeted refinement pass
         const refinePrompt = `Доработай публикацию так, чтобы итоговый балл качества стал >= ${voiceConfig.minPublishQualityScore}/100.
 Обнаруженные замечания: ${quality.penalties.details.join('; ') || quality.editorialComment}.
 Исходный текст:
@@ -267,7 +285,7 @@ ${
 ${buildStoryFactSheet(story)}
 Убери любые клише, перефразируй зачин и сохрани все важные детали.`;
 
-        const refinedPayload = await callAiForDraft({
+        const refinedPayload = await callGeminiForDraft({
           systemInstruction,
           userPrompt: refinePrompt,
           signal: controller.signal,
@@ -420,7 +438,7 @@ ${buildStoryFactSheet(story)}
 
 Сохрани верность фактам исходного сюжета и верни обновлённый JSON с оценкой качества.`;
 
-    const payload = await callAiForDraft({
+    const payload = await callGeminiForDraft({
       systemInstruction,
       userPrompt,
       signal: controller.signal,

@@ -11,6 +11,7 @@ import {
   loadPublishingSettings,
   savePublications,
 } from './publishingStorage.js';
+import { publishPostToVk } from './vkPublisher.js';
 
 export interface TelegramSendResult {
   mode: 'dry_run' | 'live';
@@ -245,6 +246,27 @@ export async function dispatchPublicationToTelegram(
       detail: `Отправлено в Telegram (message_id=${messageId}). Ожидает фактического подтверждения выхода в Дзене.`,
     });
 
+    const vkResult = await publishPostToVk({
+      text: validation.formattedText,
+      fetchImpl: options?.fetchImpl,
+    });
+
+    if (vkResult.ok && vkResult.postId) {
+      appendPublishingLog({
+        publicationId,
+        action: 'vk_sent',
+        status: 'vk_published',
+        detail: `Дублировано на стену ВК (post_id=${vkResult.postId}).`,
+      });
+    } else if (!vkResult.skipped) {
+      appendPublishingLog({
+        publicationId,
+        action: 'vk_send_failed',
+        status: 'vk_failed',
+        detail: `Не удалось продублировать в ВК: ${vkResult.error}`,
+      });
+    }
+
     return {
       mode: 'live',
       ok: true,
@@ -254,6 +276,7 @@ export async function dispatchPublicationToTelegram(
       note: 'Отправлено в Telegram. Статус установлен в zen_delivery_unconfirmed до подтверждения публикации в Дзене.',
     };
   } catch (err) {
+
     if ((err as { status?: number }).status) throw err;
     const safeMsg = maskToken(err instanceof Error ? err.message : 'Сетевой сбой Telegram API', botToken);
     const fresh = loadPublications();

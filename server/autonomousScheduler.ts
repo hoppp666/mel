@@ -65,6 +65,7 @@ import {
   isGeminiConfigured,
   isQuotaOrAuthError,
 } from './geminiClient.js';
+import { isZaiConfigured } from './zaiClient.js';
 import {
   computeRegistryStats,
   getTodayUtcDate,
@@ -367,7 +368,8 @@ export async function runAutonomousResearchCycle(options?: {
   }
 
   const analyzeImpl = options?.deps?.analyzeFn || analyzeAndTransformResearchItem;
-  const geminiReady = Boolean(options?.deps?.analyzeFn) || isGeminiConfigured();
+  const geminiReady =
+    Boolean(options?.deps?.analyzeFn) || isGeminiConfigured() || isZaiConfigured();
   let skipAiThisRun = !geminiReady;
 
   if (!skipAiThisRun) {
@@ -482,7 +484,7 @@ export async function runAutonomousResearchCycle(options?: {
           // Ignore single source fetch failure
         }
       }
-      if (leads.length < remainingSlots && isGeminiConfigured()) {
+      if (leads.length < remainingSlots && (isGeminiConfigured() || isZaiConfigured())) {
         try {
           const gLeads = await searchForeignLeadsWithGrounding({
             collection: batch.collection,
@@ -830,7 +832,7 @@ export async function runAutonomousProductionCycle(options?: {
   const hashtagsFn = options?.deps?.suggestHashtagsFn || suggestHashtagsForPublication;
   const shortenFn = options?.deps?.shortenFn || shortenForTelegramLimit;
 
-  if (!options?.deps?.generateDraftsFn && !isGeminiConfigured()) {
+  if (!options?.deps?.generateDraftsFn && !isGeminiConfigured() && !isZaiConfigured()) {
     const finishedAt = new Date().toISOString();
     const log: SchedulerRunLog = {
       runId: `RUN-${Date.now().toString(36).toUpperCase()}`,
@@ -847,7 +849,7 @@ export async function runAutonomousProductionCycle(options?: {
       storiesApproved: 0,
       publicationsCreated: 0,
       publishedToTelegram: 0,
-      summary: 'Автогенерация публикаций пропущена: не заданы GEMINI_API_KEY и резервный GIGACHAT_AUTH_KEY.',
+      summary: 'Автогенерация публикаций пропущена: не заданы GEMINI_API_KEY, резервный ZAI_API_KEY и GIGACHAT_AUTH_KEY.',
     };
     state.lastProductionRunAt = finishedAt;
     state.runHistory.unshift(log);
@@ -986,7 +988,7 @@ export async function runAutonomousProductionCycle(options?: {
         settings.safeTelegramCharLimit
       );
 
-      if (options?.deps?.suggestHashtagsFn || isGeminiConfigured()) {
+      if (options?.deps?.suggestHashtagsFn || isGeminiConfigured() || isZaiConfigured()) {
         try {
           const aiTags = await hashtagsFn(pubItem);
           const tagCheck = validateHashtags(aiTags, pubItem.body);
@@ -1001,7 +1003,10 @@ export async function runAutonomousProductionCycle(options?: {
         }
       }
 
-      if (pubItem.exceedsTelegramLimit && (options?.deps?.shortenFn || isGeminiConfigured())) {
+      if (
+        pubItem.exceedsTelegramLimit &&
+        (options?.deps?.shortenFn || isGeminiConfigured() || isZaiConfigured())
+      ) {
         try {
           const shortened = await shortenFn(pubItem);
           pubItem = enrichPublicationMetrics(

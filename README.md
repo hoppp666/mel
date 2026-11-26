@@ -2,11 +2,11 @@
 
 Платформа полного цикла для накопления, смысловой дедупликации, зарубежного исследования, авторской генерации и подготовки публикаций о любви и отношениях в фирменном стиле MELO_LOVE для **Telegram** и **Яндекс Дзена (`@zen_sync_bot`)**.
 
-- **Стек:** React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Motion, Vite 8, Node.js, Express (`server.ts`), Google Gemini (`gemini-4-hydrogen` + резерв `gemini-3.1-flash-lite`) с автоматическим переключением на **GigaChat API** (`GigaChat-2-Pro` → `GigaChat-2` → `GigaChat`).
+- **Стек:** React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Motion, Vite 8, Node.js, Express (`server.ts`), Google Gemini (`gemini-4-hydrogen` + резерв `gemini-3.1-flash-lite`) с автоматическим переключением на **Z.ai (GLM, `glm-4.5-flash`)** и затем на **GigaChat API** (`GigaChat-2-Pro` → `GigaChat-2` → `GigaChat`).
 - **Хранение:** локальные JSON-файлы в `data/*.json` с атомарной записью и ротацией до 15 бэкапов на модуль + готовая 6-табличная SQL-схема для **Supabase** (`supabase/schema.sql`).
 - **Подробная техническая сводка проекта:** [`MELO_LOVE_SUMMARY.txt`](./MELO_LOVE_SUMMARY.txt).
 
-> **Важно:** все внешние ключи (`GEMINI_API_KEY`, `GIGACHAT_AUTH_KEY`, `TELEGRAM_BOT_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) **необязательны** для запуска и работы интерфейса. Без ключей работают база сюжетов, ручной редактор, дедупликация, проверка лимитов, режим `Dry-Run` и экспорт файлов. При сбое/перегрузке Gemini (503/429) запрос автоматически переключается на свободные модели и затем на GigaChat (если задан `GIGACHAT_AUTH_KEY`).
+> **Важно:** все внешние ключи (`GEMINI_API_KEY`, `ZAI_API_KEY`, `GIGACHAT_AUTH_KEY`, `TELEGRAM_BOT_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) **необязательны** для запуска и работы интерфейса. Без ключей работают база сюжетов, ручной редактор, дедупликация, проверка лимитов, режим `Dry-Run` и экспорт файлов. При сбое/перегрузке Gemini (503/429) запрос автоматически переключается на свободные модели, затем на резервный Z.ai (GLM, `ZAI_API_KEY`) и затем на GigaChat (если задан `GIGACHAT_AUTH_KEY`).
 
 ---
 
@@ -114,6 +114,7 @@ git push -u origin main
 | Имя секрета | Назначение | Обязателен? |
 |---|---|---|
 | `GEMINI_API_KEY` | Ключ Google Gemini API (`gemini-4-hydrogen` + резерв `gemini-3.1-flash-lite`) | Нет (нужен для автоанализа и генерации) |
+| `ZAI_API_KEY` | Ключ Z.ai (GLM) — автоматический резервный AI-провайдер (OpenAI-совместимый REST API, `glm-4.5-flash`) | Нет (резерв при 429/503 или отсутствии ключей Gemini) |
 | `GIGACHAT_AUTH_KEY` | Authorization key из `developers.sber.ru` (резервный или основной AI, без карты) | Нет (резерв при сбоях Gemini) |
 | `GIGACHAT_SCOPE` | Версия доступа GigaChat (`GIGACHAT_API_PERS` по умолчанию для физлиц) | Нет |
 | `TELEGRAM_BOT_TOKEN` | Токен бота от `@BotFather` | Нет (только для live-отправки) |
@@ -126,6 +127,7 @@ git push -u origin main
 | Имя переменной | Значение | Назначение |
 |---|---|---|
 | `TELEGRAM_AUTO_SEND_ENABLED` | `false` (по умолчанию) | Главный предохранитель фоновой очереди. Пока стоит `false`, GitHub Actions выполняет только тесты/проверки и **ничего не отправляет в Telegram**. Меняйте на `true` только после полной настройки канала и проверки в `Dry-Run`. |
+| `ZAI_MODEL` | `glm-4.5-flash` (по умолчанию) | Модель резервного провайдера Z.ai. Можно оставить пустым — код использует `glm-4.5-flash`. |
 
 ---
 
@@ -171,7 +173,7 @@ MELO_LOVE — это единое Node.js + Express-приложение (`serve
 5. В разделе **Environment Variables** (по желанию сейчас или позже) добавьте переменные:
    - `NODE_VERSION` = `22`
    - `TELEGRAM_AUTO_SEND_ENABLED` = `false`
-   - По мере готовности: `GEMINI_API_KEY`, `GIGACHAT_AUTH_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+   - По мере готовности: `GEMINI_API_KEY`, `ZAI_API_KEY`, `GIGACHAT_AUTH_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 6. **Важно про сохранность данных (`data/*.json`):**
    - На бесплатном тарифе Render (Free Instance) диск сбрасывается при каждом перезапуске контейнера или новом деплое — все новые записи, сделанные через интерфейс на сервере, пропадут при рестарте.
    - **Решение 1 (простое на Render):** подключите **Persistent Disk** в настройках Web Service (точка монтирования `/opt/render/project/src/data`, если код лежит в `/opt/render/project/src`, предварительно перенеся стартовые `data/*.json` или экспортировав/импортировав базу после первого старта).

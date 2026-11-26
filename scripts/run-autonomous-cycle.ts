@@ -6,6 +6,9 @@ import {
   runAutonomousResearchCycle,
   runFullAutonomousCycle,
 } from '../server/autonomousScheduler.js';
+import { isGeminiConfigured } from '../server/geminiClient.js';
+import { isZaiConfigured } from '../server/zaiClient.js';
+import { isGigaChatConfigured } from '../server/aiClient.js';
 
 async function main() {
   const modeEnv = (process.env.AUTONOMOUS_MODE || 'full_cycle').trim();
@@ -23,6 +26,11 @@ async function main() {
 
   console.log(
     `MELO_LOVE Autonomous Runner: mode=${modeEnv}, collection=${collectionOverride || 'auto'}, dryRunPublish=${dryRunPublish}`
+  );
+  console.log(
+    `AI-провайдеры: Gemini=${isGeminiConfigured() ? 'настроен' : '—'}, резервный Z.ai (GLM)=${
+      isZaiConfigured() ? 'настроен' : '—'
+    }, GigaChat=${isGigaChatConfigured() ? 'настроен' : '—'}`
   );
 
   if (modeEnv === 'research_only') {

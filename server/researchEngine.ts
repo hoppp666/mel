@@ -39,6 +39,7 @@ import {
   isGeminiConfigured,
   isQuotaOrAuthError,
 } from './geminiClient.js';
+import { isZaiConfigured } from './zaiClient.js';
 
 const activeControllers = new Map<string, AbortController>();
 
@@ -260,7 +261,8 @@ async function executeResearchJob(jobId: string, signal: AbortSignal): Promise<v
     }
 
     const db = loadDatabase();
-    const aiConfigured = isGeminiConfigured();
+    // AI доступен, если настроен основной Gemini или резервный Z.ai (GLM).
+    const aiConfigured = isGeminiConfigured() || isZaiConfigured();
     let skipRemainingAi = !aiConfigured;
 
     for (const lead of leads) {
@@ -333,8 +335,8 @@ async function executeResearchJob(jobId: string, signal: AbortSignal): Promise<v
         baseRecord.analysisStatus = aiConfigured ? 'failed' : 'pending';
         baseRecord.queueStatus = 'research_pending';
         baseRecord.researchNotes = aiConfigured
-          ? 'ИИ-анализ пропущен из-за исчерпания лимита AI (Gemini и GigaChat); материал сохранён для повторного запуска.'
-          : 'ИИ-анализ отложен (не задан GEMINI_API_KEY или резервный GIGACHAT_AUTH_KEY); материал сохранён и готов к анализу после подключения.';
+          ? 'ИИ-анализ пропущен из-за исчерпания лимита AI (Gemini, Z.ai и GigaChat); материал сохранён для повторного запуска.'
+          : 'ИИ-анализ отложен (не заданы GEMINI_API_KEY, резервный ZAI_API_KEY или GIGACHAT_AUTH_KEY); материал сохранён и готов к анализу после подключения.';
       }
 
       // Three-contour deduplication check

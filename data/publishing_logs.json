@@ -1,139 +1,131 @@
 [
   {
-    "id": "PLOG-MWWY5MMZ-NCHA",
+    "id": "PLOG-MWWHZIKS-6L5U",
+    "publicationId": "PUB-R-000001",
+    "action": "vk_sent",
+    "status": "vk_published",
+    "detail": "Дублировано на стену ВК (post_id=18).",
+    "createdAt": "2026-11-25T19:09:33.004Z"
+  },
+  {
+    "id": "PLOG-MWWHZG9E-DVAD",
+    "publicationId": "PUB-R-000001",
+    "action": "telegram_sent",
+    "status": "zen_delivery_unconfirmed",
+    "detail": "Отправлено в Telegram (message_id=27). Ожидает фактического подтверждения выхода в Дзене.",
+    "createdAt": "2026-11-25T19:09:30.002Z"
+  },
+  {
+    "id": "PLOG-MWVXHRAY-0GH3",
+    "publicationId": "PUB-R-000001",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-R-0009 (2204/3800 симв., качество 90/100).",
+    "createdAt": "2026-11-25T09:35:52.186Z"
+  },
+  {
+    "id": "PLOG-MWVWQTNG-VJE1",
+    "publicationId": "PUB-D-999101",
+    "action": "dry_run_check",
+    "status": "ready",
+    "detail": "Тестовая проверка (без реальной отправки): 298/3800 симв. Статус не изменён.",
+    "createdAt": "2026-11-25T09:14:55.516Z"
+  },
+  {
+    "id": "PLOG-MWVWA6QQ-ZV76",
+    "publicationId": "PUB-R-000001",
+    "action": "vk_send_failed",
+    "status": "vk_failed",
+    "detail": "Не удалось продублировать в ВК: Unexpected token '<', \"  <!DOCTYPE \"... is not valid JSON",
+    "createdAt": "2026-11-25T09:01:59.330Z"
+  },
+  {
+    "id": "PLOG-MWVWA5JA-LXP4",
+    "publicationId": "PUB-R-000001",
+    "action": "telegram_sent",
+    "status": "zen_delivery_unconfirmed",
+    "detail": "Отправлено в Telegram (message_id=24). Ожидает фактического подтверждения выхода в Дзене.",
+    "createdAt": "2026-11-25T09:01:57.766Z"
+  },
+  {
+    "id": "PLOG-MWVWA54L-EMRX",
+    "publicationId": "PUB-D-999305",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-D-0019 (2179/3800 симв., качество 88/100).",
+    "createdAt": "2026-11-25T09:01:57.237Z"
+  },
+  {
+    "id": "PLOG-MWVW6H33-8R0W",
+    "publicationId": "PUB-D-999304",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-D-0018 (2464/3800 симв., качество 88/100).",
+    "createdAt": "2026-11-25T08:59:06.111Z"
+  },
+  {
+    "id": "PLOG-MWVK75GJ-T9GY",
+    "publicationId": "PUB-D-999302",
+    "action": "telegram_sent",
+    "status": "zen_delivery_unconfirmed",
+    "detail": "Отправлено в Telegram (message_id=20). Ожидает фактического подтверждения выхода в Дзене.",
+    "createdAt": "2026-11-25T03:23:42.308Z"
+  },
+  {
+    "id": "PLOG-MWVK752X-4B33",
+    "publicationId": "PUB-D-999303",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-D-0017 (2007/3800 симв., качество 93/100).",
+    "createdAt": "2026-11-25T03:23:41.817Z"
+  },
+  {
+    "id": "PLOG-MWVK6WIN-9WVS",
+    "publicationId": "PUB-R-000001",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-R-0008 (1956/3800 симв., качество 95/100).",
+    "createdAt": "2026-11-25T03:23:30.719Z"
+  },
+  {
+    "id": "PLOG-MWVK6ETK-XEA2",
+    "publicationId": "PUB-D-999302",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-D-0016 (1880/3800 симв., качество 94/100).",
+    "createdAt": "2026-11-25T03:23:07.784Z"
+  },
+  {
+    "id": "PLOG-MWUY38EG-CP0Z",
+    "publicationId": "PUB-D-999301",
+    "action": "telegram_sent",
+    "status": "zen_delivery_unconfirmed",
+    "detail": "Отправлено в Telegram (message_id=17). Ожидает фактического подтверждения выхода в Дзене.",
+    "createdAt": "2026-11-24T17:04:47.944Z"
+  },
+  {
+    "id": "PLOG-MWUXY9X4-XFZQ",
+    "publicationId": "PUB-D-999301",
+    "action": "dry_run_check",
+    "status": "ready",
+    "detail": "Тестовая проверка (без реальной отправки): 298/3800 симв. Статус не изменён.",
+    "createdAt": "2026-11-24T17:00:56.632Z"
+  },
+  {
+    "id": "PLOG-MWUXO9MZ-F6Q3",
     "publicationId": "PUB-D-999101",
     "action": "telegram_sent",
     "status": "zen_delivery_unconfirmed",
     "detail": "Отправлено в Telegram (message_id=778899). Ожидает фактического подтверждения выхода в Дзене.",
-    "createdAt": "2026-11-26T02:42:12.059Z"
+    "createdAt": "2026-11-24T16:53:09.707Z"
   },
   {
-    "id": "PLOG-MWWY5MMG-F48W",
+    "id": "PLOG-MWUXO9LV-1P6V",
     "publicationId": "PUB-D-999101",
     "action": "dry_run_check",
     "status": "ready",
     "detail": "Тестовая проверка (без реальной отправки): 298/3800 симв. Статус не изменён.",
-    "createdAt": "2026-11-26T02:42:12.040Z"
-  },
-  {
-    "id": "PLOG-MWWVXWX7-12W4",
-    "publicationId": "PUB-R-000001",
-    "action": "telegram_sent",
-    "status": "zen_delivery_unconfirmed",
-    "detail": "Отправлено в Telegram (message_id=28). Ожидает фактического подтверждения выхода в Дзене.",
-    "createdAt": "2026-11-26T01:40:12.907Z"
-  },
-  {
-    "id": "PLOG-MWWGTNY1-CJNT",
-    "publicationId": "PUB-D-999102",
-    "action": "telegram_sent",
-    "status": "zen_delivery_unconfirmed",
-    "detail": "Отправлено в Telegram (message_id=26). Ожидает фактического подтверждения выхода в Дзене.",
-    "createdAt": "2026-11-25T18:37:00.409Z"
-  },
-  {
-    "id": "PLOG-MWWGTNL5-5GWY",
-    "publicationId": "PUB-D-999103",
-    "action": "autonomous_created",
-    "status": "ready",
-    "detail": "Создана публикация по сюжету ML-D-0021 (1528/3800 симв., качество 87/100).",
-    "createdAt": "2026-11-25T18:36:59.945Z"
-  },
-  {
-    "id": "PLOG-MWWGSOIT-2812",
-    "publicationId": "PUB-R-000001",
-    "action": "autonomous_created",
-    "status": "ready",
-    "detail": "Создана публикация по сюжету ML-R-0010 (1599/3800 симв., качество 94/100).",
-    "createdAt": "2026-11-25T18:36:14.501Z"
-  },
-  {
-    "id": "PLOG-MWWGS7R0-KFDO",
-    "publicationId": "PUB-D-999102",
-    "action": "autonomous_created",
-    "status": "ready",
-    "detail": "Создана публикация по сюжету ML-D-0020 (1508/3800 симв., качество 85/100).",
-    "createdAt": "2026-11-25T18:35:52.764Z"
-  },
-  {
-    "id": "PLOG-MWWD6J62-0SP9",
-    "publicationId": "PUB-D-999101",
-    "action": "dry_run_check",
-    "status": "ready",
-    "detail": "Тестовая проверка (без реальной отправки): 298/3800 симв. Статус не изменён.",
-    "createdAt": "2026-11-25T16:55:02.282Z"
-  },
-  {
-    "id": "PLOG-MWVTL7RE-90R3",
-    "publicationId": "PUB-R-000001",
-    "action": "telegram_sent",
-    "status": "zen_delivery_unconfirmed",
-    "detail": "Отправлено в Telegram (message_id=23). Ожидает фактического подтверждения выхода в Дзене.",
-    "createdAt": "2026-11-25T07:46:35.018Z"
-  },
-  {
-    "id": "PLOG-MWVTL7F3-YBS5",
-    "publicationId": "PUB-D-999305",
-    "action": "autonomous_created",
-    "status": "ready",
-    "detail": "Создана публикация по сюжету ML-D-0019 (2104/3800 симв., качество 92/100).",
-    "createdAt": "2026-11-25T07:46:34.575Z"
-  },
-  {
-    "id": "PLOG-MWVTL0CA-4LX0",
-    "publicationId": "PUB-R-000002",
-    "action": "autonomous_created",
-    "status": "ready",
-    "detail": "Создана публикация по сюжету ML-R-0009 (2215/3800 симв., качество 92/100).",
-    "createdAt": "2026-11-25T07:46:25.402Z"
-  },
-  {
-    "id": "PLOG-MWVTJAHC-N5R8",
-    "publicationId": "PUB-D-999304",
-    "action": "autonomous_created",
-    "status": "ready",
-    "detail": "Создана публикация по сюжету ML-D-0018 (2304/3800 симв., качество 93/100).",
-    "createdAt": "2026-11-25T07:45:05.232Z"
-  },
-  {
-    "id": "PLOG-MWVN7P57-6GBX",
-    "publicationId": "PUB-D-999302",
-    "action": "telegram_sent",
-    "status": "zen_delivery_unconfirmed",
-    "detail": "Отправлено в Telegram (message_id=21). Ожидает фактического подтверждения выхода в Дзене.",
-    "createdAt": "2026-11-25T04:48:06.667Z"
-  },
-  {
-    "id": "PLOG-MWV73OEH-BJP7",
-    "publicationId": "PUB-D-999301",
-    "action": "telegram_sent",
-    "status": "zen_delivery_unconfirmed",
-    "detail": "Отправлено в Telegram (message_id=19). Ожидает фактического подтверждения выхода в Дзене.",
-    "createdAt": "2026-11-24T21:17:05.225Z"
-  },
-  {
-    "id": "PLOG-MWV73O2D-1RN5",
-    "publicationId": "PUB-D-999303",
-    "action": "autonomous_created",
-    "status": "ready",
-    "detail": "Создана публикация по сюжету ML-D-0017 (2211/3800 симв., качество 93/100).",
-    "createdAt": "2026-11-24T21:17:04.789Z"
-  },
-  {
-    "id": "PLOG-MWV71XQD-5BXJ",
-    "publicationId": "PUB-R-000001",
-    "action": "autonomous_created",
-    "status": "ready",
-    "detail": "Создана публикация по сюжету ML-R-0008 (1991/3800 симв., качество 94/100).",
-    "createdAt": "2026-11-24T21:15:44.005Z"
-  },
-  {
-    "id": "PLOG-MWV71O0P-ZT6Z",
-    "publicationId": "PUB-D-999302",
-    "action": "autonomous_created",
-    "status": "ready",
-    "detail": "Создана публикация по сюжету ML-D-0016 (2117/3800 симв., качество 95/100).",
-    "createdAt": "2026-11-24T21:15:31.417Z"
+    "createdAt": "2026-11-24T16:53:09.667Z"
   },
   {
     "id": "PLOG-MWTOXFLB-STBT",

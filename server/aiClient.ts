@@ -2,6 +2,13 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import https from 'node:https';
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import {
+  callZaiChatCompletionJson,
+  DEFAULT_ZAI_MODEL,
+  isZaiConfigured,
+  resolveZaiCredentials,
+  ZaiApiError,
+} from './zaiClient.js';
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-4-hydrogen';
 export const DEFAULT_GEMINI_FREE_FALLBACKS = ['gemini-3.1-flash-lite'] as const;
@@ -123,6 +130,8 @@ export function isGigaChatConfigured(): boolean {
 export function resolveAiApiToken(): string {
   const gemini = resolveGeminiApiKey();
   if (gemini) return gemini;
+  const zai = resolveZaiCredentials();
+  if (zai.apiKey) return zai.apiKey;
   const giga = resolveGigaChatCredentials();
   if (giga.authKey) return giga.authKey;
   return resolveOpenAiCompatBackup().apiKey;
@@ -131,6 +140,9 @@ export function resolveAiApiToken(): string {
 export function resolveAiModel(): string {
   if (isGeminiPrimaryConfigured()) {
     return resolveGeminiModelList()[0] || DEFAULT_GEMINI_MODEL;
+  }
+  if (isZaiConfigured()) {
+    return resolveZaiCredentials().model || DEFAULT_ZAI_MODEL;
   }
   if (isGigaChatConfigured()) {
     return resolveGigaChatCredentials().models[0] || DEFAULT_GIGACHAT_MODELS[0];
@@ -143,6 +155,7 @@ export const AI_MODEL = resolveAiModel();
 export function isAiConfigured(): boolean {
   return Boolean(
     isGeminiPrimaryConfigured() ||
+      isZaiConfigured() ||
       isGigaChatConfigured() ||
       resolveOpenAiCompatBackup().apiKey
   );
@@ -236,7 +249,7 @@ export function formatAiError(err: unknown): AiApiError {
     lower.includes('payment required')
   ) {
     return new AiApiError(
-      'Превышен лимит запросов AI (429 RESOURCE_EXHAUSTED). Повторите чуть позже или подключите резервный GigaChat API (GIGACHAT_AUTH_KEY).',
+      'Превышен лимит запросов AI (429 RESOURCE_EXHAUSTED). Повторите чуть позже или подключите резервные провайдеры Z.ai (ZAI_API_KEY) и GigaChat (GIGACHAT_AUTH_KEY).',
       429,
       'RESOURCE_EXHAUSTED'
     );
@@ -252,7 +265,7 @@ export function formatAiError(err: unknown): AiApiError {
     lower.includes('credentials')
   ) {
     return new AiApiError(
-      'Доступ к AI API отклонён (401/403). Проверьте GEMINI_API_KEY или резервный GIGACHAT_AUTH_KEY (и GIGACHAT_SCOPE) в Secrets.',
+      'Доступ к AI API отклонён (401/403). Проверьте GEMINI_API_KEY, резервный ZAI_API_KEY или GIGACHAT_AUTH_KEY (и GIGACHAT_SCOPE) в Secrets.',
       403,
       'PERMISSION_DENIED'
     );
@@ -264,7 +277,7 @@ export function formatAiError(err: unknown): AiApiError {
     lower.includes('502')
   ) {
     return new AiApiError(
-      'Сервер Gemini временно перегружен (502/503 UNAVAILABLE), резервные модели тоже не ответили. Повторите запрос чуть позже или проверьте GIGACHAT_AUTH_KEY.',
+      'Сервер Gemini временно перегружен (502/503 UNAVAILABLE), резервные провайдеры Z.ai и GigaChat тоже не ответили. Повторите запрос чуть позже или проверьте ZAI_API_KEY / GIGACHAT_AUTH_KEY.',
       503,
       'UNAVAILABLE'
     );
@@ -284,7 +297,7 @@ export function formatAiError(err: unknown): AiApiError {
   }
   if (lower.includes('404') || lower.includes('not_found')) {
     return new AiApiError(
-      'Выбранная AI-модель не найдена (404). Проверьте настройки GEMINI_MODEL или GIGACHAT_MODEL.',
+      'Выбранная AI-модель не найдена (404). Проверьте настройки GEMINI_MODEL, ZAI_MODEL или GIGACHAT_MODEL.',
       404,
       'NOT_FOUND'
     );
@@ -813,10 +826,11 @@ export async function callChatCompletionJson<T>(params: {
   const geminiKey = resolveGeminiApiKey();
   const gigaCreds = resolveGigaChatCredentials();
   const backup = resolveOpenAiCompatBackup();
+  const zaiCreds = resolveZaiCredentials();
 
-  if (!geminiKey && !gigaCreds.authKey && !backup.apiKey) {
+  if (!geminiKey && !zaiCreds.apiKey && !gigaCreds.authKey && !backup.apiKey) {
     throw new AiApiError(
-      'AI-ключи пока не настроены (добавьте GEMINI_API_KEY и/или резервный GigaChat: GIGACHAT_AUTH_KEY). Остальные разделы работают без ключей.',
+      'AI-ключи пока не настроены (добавьте GEMINI_API_KEY, резервный ZAI_API_KEY и/или GigaChat: GIGACHAT_AUTH_KEY). Остальные разделы работают без ключей.',
       400,
       'API_KEY_MISSING'
     );
@@ -862,7 +876,28 @@ export async function callChatCompletionJson<T>(params: {
     }
   }
 
-  // Tier 2: GigaChat API (Sber) fallback cascade: GigaChat-2-Pro -> GigaChat-2 -> GigaChat
+  // Tier 2: Z.ai (GLM) — автоматический резервный провайдер через OpenAI-совместимый REST API.
+  // Включается, когда ключи Gemini не настроены или все вернули ошибку лимита/перегрузки.
+  if (zaiCreds.apiKey) {
+    try {
+      return await callZaiChatCompletionJson<T>({
+        systemInstruction: params.systemInstruction,
+        userPrompt: params.userPrompt,
+        temperature: params.temperature,
+        maxTokens: params.maxTokens,
+        timeoutMs,
+        signal: params.signal,
+        expectArray: params.expectArray,
+      });
+    } catch (err) {
+      if (err instanceof ZaiApiError && err.code === 'ABORTED') {
+        throw err;
+      }
+      lastError = err;
+    }
+  }
+
+  // Tier 3: GigaChat API (Sber) fallback cascade: GigaChat-2-Pro -> GigaChat-2 -> GigaChat
   if (gigaCreds.authKey) {
     for (const model of gigaCreds.models) {
       try {
@@ -886,7 +921,7 @@ export async function callChatCompletionJson<T>(params: {
     }
   }
 
-  // Tier 3: Optional OpenAI-compatible backup if explicitly configured
+  // Tier 4: Optional OpenAI-compatible backup if explicitly configured
   if (backup.apiKey) {
     try {
       return await callOpenAiCompatibleEndpoint<T>({

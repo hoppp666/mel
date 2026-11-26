@@ -631,7 +631,7 @@ test('Scenario 8: GitHub Actions workflows have schedule, workflow_dispatch, con
   assert.ok(researchYml.includes('GIGACHAT_SCOPE'));
 
   assert.ok(publishYml.includes('schedule:'));
-  assert.ok(publishYml.includes("cron: '0 */2 * * *'"));
+  assert.ok(publishYml.includes("cron: '*/30 * * * *'"));
   assert.ok(publishYml.includes('group: melo-love-autonomous-data'));
   assert.ok(publishYml.includes('TELEGRAM_AUTO_SEND_ENABLED'));
 });

@@ -516,12 +516,15 @@ export type PublishingQueueStatus =
   | 'failed';
 
 export interface EditorialCheckReport {
+  overallScore?: number;
   spellingOk: boolean;
   noRepetitionOk: boolean;
   logicOk: boolean;
-  meloStyleOk: boolean;
+  styleOk?: boolean;
+  meloStyleOk?: boolean;
   headlineOk: boolean;
   hashtagsOk: boolean;
+  sourceMatchOk?: boolean;
   notes: string[];
 }
 

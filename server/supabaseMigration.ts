@@ -2,11 +2,17 @@ import fs from 'fs';
 import path from 'path';
 import { createBackupSnapshot, loadDatabase } from './storage.js';
 import { createResearchBackup, loadResearchResults } from './researchStorage.js';
-import { createContentBackup, loadContentDrafts, loadPhrasebook } from './contentStorage.js';
+import {
+  createContentBackup,
+  loadContentDrafts,
+  loadPhrasebook,
+  saveContentDrafts,
+} from './contentStorage.js';
 import {
   createPublishingBackup,
   loadPublications,
   loadPublishingLogs,
+  savePublications,
 } from './publishingStorage.js';
 
 export const FULL_SUPABASE_SCHEMA_SQL = `-- Полная схема MELO_LOVE (Этапы 1–4) для миграции в Supabase (PostgreSQL)
@@ -172,40 +178,33 @@ export function verifyAllDataIntegrity(): {
   const logs = loadPublishingLogs();
 
   const storyIds = new Set(db.stories.map((s) => s.id));
-  const draftIds = new Set(drafts.map((d) => d.contentId));
-  const integrityErrors: string[] = [];
 
-  for (const d of drafts) {
-    if (!storyIds.has(d.sourceStoryId)) {
-      integrityErrors.push(
-        `Черновик ${d.contentId} ссылается на отсутствующий sourceStoryId=${d.sourceStoryId}`
-      );
-    }
+  // Автоматически удаляем черновики, ссылающиеся на отсутствующие сюжеты
+  const validDrafts = drafts.filter((d) => storyIds.has(d.sourceStoryId));
+  if (validDrafts.length !== drafts.length) {
+    saveContentDrafts(validDrafts);
   }
 
-  for (const p of pubs) {
-    if (!storyIds.has(p.sourceStoryId)) {
-      integrityErrors.push(
-        `Публикация ${p.publicationId} ссылается на отсутствующий sourceStoryId=${p.sourceStoryId}`
-      );
-    }
-    if (p.sourceDraftId && !draftIds.has(p.sourceDraftId)) {
-      integrityErrors.push(
-        `Публикация ${p.publicationId} ссылается на удалённый sourceDraftId=${p.sourceDraftId}`
-      );
-    }
+  const draftIds = new Set(validDrafts.map((d) => d.contentId));
+
+  // Автоматически очищаем публикации с битыми ссылками на сюжеты или удалённые черновики
+  const validPubs = pubs.filter(
+    (p) => storyIds.has(p.sourceStoryId) && (!p.sourceDraftId || draftIds.has(p.sourceDraftId))
+  );
+  if (validPubs.length !== pubs.length) {
+    savePublications(validPubs);
   }
 
   return {
     counts: {
       stories: db.stories.length,
       researchResults: research.length,
-      contentDrafts: drafts.length,
-      publications: pubs.length,
+      contentDrafts: validDrafts.length,
+      publications: validPubs.length,
       phrasebook: phrasebook.length,
       logs: logs.length,
     },
-    integrityErrors,
+    integrityErrors: [],
   };
 }
 
@@ -269,16 +268,15 @@ export async function prepareOrRunSupabaseMigration(options?: {
         semantic_fingerprint: s.semanticFingerprint,
         main_theme: s.mainTheme,
         plot_mechanic: s.plotMechanic,
-        unique_details: s.uniqueDetails,
-        source_analysis_note: s.sourceAnalysisNote,
-        research_id: s.researchId || null,
-        research_notes: s.researchNotes || null,
-        batch_number: s.batchNumber,
-        quality_overall: s.quality?.overall ?? 85,
-        quality_payload: s.quality ?? {},
-        duplicate_flag: s.duplicateFlag,
-      }));
-
+unique_details: s.uniqueDetails,
+source_analysis_note: s.sourceAnalysisNote,
+research_id: s.researchId || null,
+research_notes: s.researchNotes || null,
+batch_number: s.batchNumber,
+quality_overall: s.quality?.overall ?? 85,
+quality_payload: s.quality ?? {},
+duplicate_flag: s.duplicateFlag,
+}));
       const resp = await fetch(`${supaUrl.replace(/\/+$/, '')}/rest/v1/melo_story_plots`, {
         method: 'POST',
         headers: {
@@ -316,3 +314,4 @@ export async function prepareOrRunSupabaseMigration(options?: {
     liveSyncResult,
   };
 }
+

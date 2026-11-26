@@ -31,6 +31,8 @@ import {
   resolveGigaChatCredentials,
   setGigaChatTransportForTest,
 } from '../server/aiClient.js';
+import { setZaiTransportForTest } from '../server/zaiClient.js';
+import { suggestHashtagsForPublication } from '../server/studioAiAssistant.js';
 import {
   prepareOrRunSupabaseMigration,
   verifyAllDataIntegrity,
@@ -307,6 +309,9 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
   const prevCh = process.env.TELEGRAM_CHANNEL_ID;
   const prevSupaUrl = process.env.SUPABASE_URL;
   const prevSupaKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const prevZaiKey = process.env.ZAI_API_KEY;
+  const prevZaiModel = process.env.ZAI_MODEL;
+  const prevZaiEndpoint = process.env.ZAI_API_ENDPOINT;
 
   try {
     delete process.env.GEMINI_API_KEY;
@@ -321,6 +326,9 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
     delete process.env.GROQ_API_ENDPOINT;
     delete process.env.AI_ENDPOINT;
     delete process.env.OPENAI_API_KEY;
+    delete process.env.ZAI_API_KEY;
+    delete process.env.ZAI_MODEL;
+    delete process.env.ZAI_API_ENDPOINT;
     delete process.env.TELEGRAM_BOT_TOKEN;
     delete process.env.TELEGRAM_CHANNEL_ID;
     delete process.env.SUPABASE_URL;
@@ -388,6 +396,12 @@ test('all integrations operate non-blockingly when GEMINI_API_KEY, GIGACHAT_*, T
     else process.env.SUPABASE_URL = prevSupaUrl;
     if (prevSupaKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     else process.env.SUPABASE_SERVICE_ROLE_KEY = prevSupaKey;
+    if (prevZaiKey === undefined) delete process.env.ZAI_API_KEY;
+    else process.env.ZAI_API_KEY = prevZaiKey;
+    if (prevZaiModel === undefined) delete process.env.ZAI_MODEL;
+    else process.env.ZAI_MODEL = prevZaiModel;
+    if (prevZaiEndpoint === undefined) delete process.env.ZAI_API_ENDPOINT;
+    else process.env.ZAI_API_ENDPOINT = prevZaiEndpoint;
     restoreFile(PUBLICATIONS_PATH, snapPubs);
     restoreFile(PUBLISHING_SETTINGS_PATH, snapSettings);
     restoreFile(PUBLISHING_LOGS_PATH, snapLogs);
@@ -402,11 +416,17 @@ test('Gemini model cascade includes free fallback and GigaChat OAuth + model fai
   const prevGemini = process.env.GEMINI_API_KEY;
   const prevGigaAuth = process.env.GIGACHAT_AUTH_KEY;
   const prevGigaScope = process.env.GIGACHAT_SCOPE;
+  const prevZaiKey = process.env.ZAI_API_KEY;
+  const prevZaiModel = process.env.ZAI_MODEL;
+  const prevZaiEndpoint = process.env.ZAI_API_ENDPOINT;
 
   try {
     delete process.env.GEMINI_API_KEY;
     process.env.GIGACHAT_AUTH_KEY = 'Basic dGVzdC1jbGllbnQ6dGVzdC1zZWNyZXQ=';
     delete process.env.GIGACHAT_SCOPE;
+    delete process.env.ZAI_API_KEY;
+    delete process.env.ZAI_MODEL;
+    delete process.env.ZAI_API_ENDPOINT;
 
     const creds = resolveGigaChatCredentials();
     assert.equal(creds.authKey, 'dGVzdC1jbGllbnQ6dGVzdC1zZWNyZXQ=');
@@ -479,5 +499,93 @@ test('Gemini model cascade includes free fallback and GigaChat OAuth + model fai
     else process.env.GIGACHAT_AUTH_KEY = prevGigaAuth;
     if (prevGigaScope === undefined) delete process.env.GIGACHAT_SCOPE;
     else process.env.GIGACHAT_SCOPE = prevGigaScope;
+    if (prevZaiKey === undefined) delete process.env.ZAI_API_KEY;
+    else process.env.ZAI_API_KEY = prevZaiKey;
+    if (prevZaiModel === undefined) delete process.env.ZAI_MODEL;
+    else process.env.ZAI_MODEL = prevZaiModel;
+    if (prevZaiEndpoint === undefined) delete process.env.ZAI_API_ENDPOINT;
+    else process.env.ZAI_API_ENDPOINT = prevZaiEndpoint;
+  }
+});
+
+test('Z.ai (GLM) automatic fallback: cascade tier 2 and direct Gemini-rotation call sites switch to Z.ai when Gemini keys are missing', async () => {
+  const prevGemini = process.env.GEMINI_API_KEY;
+  const prevZaiKey = process.env.ZAI_API_KEY;
+  const prevZaiModel = process.env.ZAI_MODEL;
+  const prevZaiEndpoint = process.env.ZAI_API_ENDPOINT;
+
+  try {
+    delete process.env.GEMINI_API_KEY;
+    process.env.ZAI_API_KEY = 'test-zai-key';
+    process.env.ZAI_MODEL = 'glm-4.5-flash';
+    delete process.env.ZAI_API_ENDPOINT;
+
+    const calls: Array<{ url: string; headers: Record<string, string>; body: string }> = [];
+    setZaiTransportForTest(async ({ url, headers, body }) => {
+      calls.push({ url, headers, body });
+      if (calls.length === 1) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: '```json\n{"ok":true,"provider":"zai-glm"}\n```',
+                },
+              },
+            ],
+          }),
+        };
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          choices: [
+            {
+              message: {
+                content:
+                  '<think>рассуждения модели</think>```json\n{"hashtags":["#отношения","#доверие","#семейный_бюджет"]}\n```',
+              },
+            },
+          ],
+        }),
+      };
+    });
+
+    // 1. Каскад callChatCompletionJson: Z.ai — Tier 2 сразу после Gemini и перед GigaChat.
+    const result = await callChatCompletionJson<{ ok: boolean; provider: string }>({
+      systemInstruction: 'Тест JSON',
+      userPrompt: 'Верни JSON',
+    });
+    assert.deepEqual(result, { ok: true, provider: 'zai-glm' });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, 'https://api.z.ai/api/paas/v4/chat/completions');
+    assert.equal(calls[0].headers.Authorization, 'Bearer test-zai-key');
+    const firstBody = JSON.parse(calls[0].body) as {
+      model: string;
+      stream: boolean;
+      messages: Array<{ role: string; content: string }>;
+    };
+    assert.equal(firstBody.model, 'glm-4.5-flash');
+    assert.equal(firstBody.stream, false);
+    assert.ok(firstBody.messages.some((m) => m.role === 'system' && m.content.includes('JSON')));
+
+    // 2. Прямые места вызова runWithGeminiRotation (studioAiAssistant): при отсутствии ключей
+    //    Gemini (429/503/API_KEY_MISSING) выполнение не падает, а переключается на Z.ai (GLM).
+    const pub = makePublication();
+    const hashtags = await suggestHashtagsForPublication(pub);
+    assert.equal(calls.length, 2);
+    assert.ok(hashtags.length >= 3);
+    assert.ok(hashtags.every((t) => t.startsWith('#')));
+  } finally {
+    setZaiTransportForTest(null);
+    if (prevGemini === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = prevGemini;
+    if (prevZaiKey === undefined) delete process.env.ZAI_API_KEY;
+    else process.env.ZAI_API_KEY = prevZaiKey;
+    if (prevZaiModel === undefined) delete process.env.ZAI_MODEL;
+    else process.env.ZAI_MODEL = prevZaiModel;
+    if (prevZaiEndpoint === undefined) delete process.env.ZAI_API_ENDPOINT;
+    else process.env.ZAI_API_ENDPOINT = prevZaiEndpoint;
   }
 });

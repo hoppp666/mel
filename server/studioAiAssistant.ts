@@ -1,14 +1,23 @@
+import { ThinkingLevel, Type } from '@google/genai';
 import { PublicationItem } from '../src/shared/types.js';
-import { normalizeHashtagsList, TELEGRAM_SAFE_CHAR_LIMIT } from '../src/shared/publishingUtils.js';
-import { sanitizeKramarovskyDashes } from '../src/shared/contentUtils.js';
-import { callChatCompletionJson, formatAiError } from './aiClient.js';
+import {
+  MAX_TOPIC_HASHTAGS,
+  MIN_TOPIC_HASHTAGS,
+  normalizeHashtagsList,
+  TELEGRAM_SAFE_CHAR_LIMIT,
+} from '../src/shared/publishingUtils.js';
+import {
+  formatGeminiError,
+  GEMINI_MODEL,
+  runWithGeminiZaiFallback,
+  withTimeout,
+} from './geminiClient.js';
 
-const KRAMAROVSKY_ASSISTANT_SYSTEM = `Ты — редактор проекта MELO_LOVE в яркой, живой, слегка ироничной устной стилистике Ильи Крамаровского.
-Правила:
-- Никакого канцелярита («в современном мире», «важно отметить», «подводя итог», «не секрет, что», «таким образом»).
-- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать длинные тире (—) и средние тире (–). Используй запятые, точки, двоеточия и скобки.
-- Никакого Markdown (** / __ / # в заголовках и теле).
-- Отвечай строго валидным JSON-объектом.`;
+const ANTI_AI_RULES = `
+Правила естественного языка (анти-ИИ):
+- Никакого канцелярита и шаблонов нейросети: не используй «важно отметить», «стоит понимать», «в современном мире», «не секрет, что», «подводя итог», «в заключение», «играет ключевую роль», «на самом деле».
+- Адаптируй детали под аудиторию в РФ: живой разговорный язык, естественные формулировки без «переводной» кальки.
+- Не используй Markdown (** / __ / ссылки) — только чистый текст и короткие живые абзацы.`;
 
 export async function generateAlternativeHeadlines(
   pub: PublicationItem
@@ -19,26 +28,49 @@ export async function generateAlternativeHeadlines(
     }).
 Ограничения:
 - Каждый заголовок от 25 до 115 символов (чтобы безопасно уложиться в лимит 140 символов первого предложения для Яндекс Дзена).
-- Без кликбейтного жёлтого крика («ШОК!», «Вы не поверите!»), без банальных штампов и БЕЗ длинных тире (—/–).
+- Без кликбейтного жёлтого крика («ШОК!», «Вы не поверите!») и без банальных штампов.
 - Текущий заголовок: ${pub.title}
-- Текст: ${pub.body.slice(0, 1200)}
+- Текст: ${pub.body.slice(0, 1200)}`;
 
-Верни JSON: {"headlines": ["...", "...", "...", "..."]}`;
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        headlines: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+      },
+      required: ['headlines'],
+    };
 
-    const parsed = await callChatCompletionJson<{ headlines?: string[] }>({
-      systemInstruction: KRAMAROVSKY_ASSISTANT_SYSTEM,
-      userPrompt: prompt,
-      temperature: 0.8,
-      maxTokens: 800,
-      timeoutMs: 45_000,
-    });
+    const res = await runWithGeminiZaiFallback(
+      (ai) =>
+        withTimeout(
+          ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: prompt,
+            config: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: 'application/json',
+              responseSchema,
+            },
+          }),
+          25000
+        ),
+      {
+        userPrompt: prompt,
+        responseSchemaHint: responseSchema,
+        timeoutMs: 25000,
+      }
+    );
 
+    const parsed = JSON.parse((res.text ?? '{}').trim()) as { headlines?: string[] };
     return (parsed.headlines || [])
-      .map((h) => sanitizeKramarovskyDashes(String(h)).trim())
+      .map((h) => String(h).trim())
       .filter((h) => h.length >= 8 && h.length <= 135)
       .slice(0, 5);
   } catch (err) {
-    throw formatAiError(err);
+    throw formatGeminiError(err);
   }
 }
 
@@ -51,57 +83,76 @@ export async function seoAdaptForDzen(pub: PublicationItem): Promise<{
   diffSummary: string;
 }> {
   try {
-    const prompt = `Сделай деликатную SEO- и читательскую адаптацию публикации для Яндекс Дзена и Telegram-кросспостинга, сохраняя живой ритм и интонацию Ильи Крамаровского.
+    const prompt = `Сделай деликатную редакторскую и читательскую адаптацию публикации для Яндекс Дзена и Telegram-кросспостинга с упором на аудиторию в РФ.
 Правила:
 1. Никакого искусственного спама ключевыми словами (не порти живой авторский стиль MELO_LOVE).
-2. Заголовок до 125 символов, звучит естественно.
+2. Заголовок должен быть до 125 символов и звучать естественно как первое предложение текста.
 3. Общий текст с пробелами должен укладываться в 3500 символов (чтобы с хештегами быть строго <= ${TELEGRAM_SAFE_CHAR_LIMIT}).
-4. Не используй Markdown (** / __ / ссылки) и длинные тире (—/–) — только чистый текст с короткими абзацами.
-5. Предложи 3–5 точных тематических хештегов (формат #слово_по_теме).
+4. Подбери от ${MIN_TOPIC_HASHTAGS} до ${MAX_TOPIC_HASHTAGS} точных тематических хештегов по сути сюжета (формат #слово_по_теме, кириллица или латиница без пробелов).
+${ANTI_AI_RULES}
 
 Текущий заголовок: ${pub.title}
 Текущий анонс: ${pub.teaser}
 Текущий текст:
 ${pub.body}
-Финальный вопрос: ${pub.closingQuestion}
+Финальный вопрос: ${pub.closingQuestion}`;
 
-Верни JSON:
-{
-  "adaptedTitle": "...",
-  "adaptedTeaser": "...",
-  "adaptedBody": "...",
-  "seoKeywords": ["..."],
-  "suggestedHashtags": ["#..."],
-  "diffSummary": "..."
-}`;
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        adaptedTitle: { type: Type.STRING },
+        adaptedTeaser: { type: Type.STRING },
+        adaptedBody: { type: Type.STRING },
+        seoKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+        suggestedHashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
+        diffSummary: { type: Type.STRING },
+      },
+      required: [
+        'adaptedTitle',
+        'adaptedTeaser',
+        'adaptedBody',
+        'seoKeywords',
+        'suggestedHashtags',
+        'diffSummary',
+      ],
+    };
 
-    const parsed = await callChatCompletionJson<{
-      adaptedTitle?: string;
-      adaptedTeaser?: string;
-      adaptedBody?: string;
-      seoKeywords?: string[];
-      suggestedHashtags?: string[];
-      diffSummary?: string;
-    }>({
-      systemInstruction: KRAMAROVSKY_ASSISTANT_SYSTEM,
-      userPrompt: prompt,
-      temperature: 0.55,
-      maxTokens: 2800,
-      timeoutMs: 45_000,
-    });
+    const res = await runWithGeminiZaiFallback(
+      (ai) =>
+        withTimeout(
+          ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: prompt,
+            config: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: 'application/json',
+              responseSchema,
+            },
+          }),
+          30000
+        ),
+      {
+        userPrompt: prompt,
+        responseSchemaHint: responseSchema,
+        timeoutMs: 30000,
+      }
+    );
 
+    const parsed = JSON.parse((res.text ?? '{}').trim());
     return {
-      adaptedTitle: sanitizeKramarovskyDashes(String(parsed.adaptedTitle || pub.title)).trim(),
-      adaptedTeaser: sanitizeKramarovskyDashes(String(parsed.adaptedTeaser || pub.teaser)).trim(),
-      adaptedBody: sanitizeKramarovskyDashes(String(parsed.adaptedBody || pub.body)).trim(),
-      seoKeywords: Array.isArray(parsed.seoKeywords) ? parsed.seoKeywords.slice(0, 6) : [],
+      adaptedTitle: String(parsed.adaptedTitle || pub.title).trim(),
+      adaptedTeaser: String(parsed.adaptedTeaser || pub.teaser).trim(),
+      adaptedBody: String(parsed.adaptedBody || pub.body).trim(),
+      seoKeywords: Array.isArray(parsed.seoKeywords) ? parsed.seoKeywords.slice(0, 8) : [],
       suggestedHashtags: normalizeHashtagsList(
         Array.isArray(parsed.suggestedHashtags) ? parsed.suggestedHashtags : []
-      ).slice(0, 5),
-      diffSummary: String(parsed.diffSummary || 'Уточнены формулировки и ритм абзацев для Дзена.').trim(),
+      ).slice(0, MAX_TOPIC_HASHTAGS),
+      diffSummary: String(
+        parsed.diffSummary || 'Уточнены формулировки, убраны штампы и добавлены тематические теги.'
+      ).trim(),
     };
   } catch (err) {
-    throw formatAiError(err);
+    throw formatGeminiError(err);
   }
 }
 
@@ -111,57 +162,108 @@ export async function shortenForTelegramLimit(pub: PublicationItem): Promise<{
 }> {
   try {
     const prompt = `Бережно сократи основной текст публикации так, чтобы вся публикация целиком (с заголовком, вопросом и хештегами) гарантированно укладывалась до 3550 символов с пробелами (лимит Telegram — ${TELEGRAM_SAFE_CHAR_LIMIT}).
-Сохрани все ключевые жизненные детали, мотивацию участников, живой ритм и интонацию (короткие фразы, разговорность, БЕЗ длинных тире —/– и без Markdown).
+Сохрани все ключевые жизненные детали, мотивацию участников и живой тон MELO_LOVE. Не превращай рассказ в сухой пересказ.
+${ANTI_AI_RULES}
 
 Заголовок: ${pub.title}
 Текст (${pub.body.length} симв.):
 ${pub.body}
-Вопрос: ${pub.closingQuestion}
+Вопрос: ${pub.closingQuestion}`;
 
-Верни JSON: {"shortenedBody": "...", "explanation": "..."}`;
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        shortenedBody: { type: Type.STRING },
+        explanation: { type: Type.STRING },
+      },
+      required: ['shortenedBody', 'explanation'],
+    };
 
-    const parsed = await callChatCompletionJson<{
-      shortenedBody?: string;
-      explanation?: string;
-    }>({
-      systemInstruction: KRAMAROVSKY_ASSISTANT_SYSTEM,
-      userPrompt: prompt,
-      temperature: 0.45,
-      maxTokens: 2400,
-      timeoutMs: 45_000,
-    });
+    const res = await runWithGeminiZaiFallback(
+      (ai) =>
+        withTimeout(
+          ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: prompt,
+            config: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: 'application/json',
+              responseSchema,
+            },
+          }),
+          25000
+        ),
+      {
+        userPrompt: prompt,
+        responseSchemaHint: responseSchema,
+        timeoutMs: 25000,
+      }
+    );
 
+    const parsed = JSON.parse((res.text ?? '{}').trim());
     return {
-      shortenedBody: sanitizeKramarovskyDashes(String(parsed.shortenedBody || pub.body)).trim(),
-      explanation: String(parsed.explanation || 'Текст сжат с сохранением ключевой сцены.').trim(),
+      shortenedBody: String(parsed.shortenedBody || pub.body).trim(),
+      explanation: String(parsed.explanation || 'Текст бережно сокращён под лимит Telegram.').trim(),
     };
   } catch (err) {
-    throw formatAiError(err);
+    throw formatGeminiError(err);
   }
 }
 
-export async function suggestHashtagsForPublication(pub: PublicationItem): Promise<string[]> {
+export async function suggestHashtagsForPublication(
+  pub: PublicationItem
+): Promise<string[]> {
   try {
-    const prompt = `Подбери от 3 до 5 точных русских хештегов для этой публикации MELO_LOVE.
-Правила:
-- Начинаются с #, без пробелов (используй _ при необходимости).
-- Не используй слишком общие теги вроде #жизнь, #люди, #история, #текст, #пост.
-- Хештеги должны отражать конкретную тему и конфликт текста.
+    const prompt = `Подбери от 5 до ${MAX_TOPIC_HASHTAGS} точных тематических хештегов на русском языке под конкретную тему и сюжет этой публикации (раздел: ${
+      pub.collection === 'debate' ? 'Споры и мнения' : 'Романтика и отношения'
+    }).
+Требования:
+- Только хештеги по смыслу конкретной новости/ситуации (эмоции, динамика пары, быт, деньги, личные границы, доверие, семья, свидания и т.д.).
+- Без общих слов вроде #новости, #пост, #текст, #жизнь, #мысли, #ии.
+- Каждый тег с #, без пробелов и дефисов (используй нижнее подчёркивание при необходимости).
+
 Заголовок: ${pub.title}
-Текст: ${pub.body.slice(0, 1200)}
+Анонс: ${pub.teaser}
+Текст: ${pub.body.slice(0, 1400)}`;
 
-Верни JSON: {"hashtags": ["#...", "#...", "#..."]}`;
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        hashtags: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+      },
+      required: ['hashtags'],
+    };
 
-    const parsed = await callChatCompletionJson<{ hashtags?: string[] }>({
-      systemInstruction: KRAMAROVSKY_ASSISTANT_SYSTEM,
-      userPrompt: prompt,
-      temperature: 0.5,
-      maxTokens: 400,
-      timeoutMs: 30_000,
-    });
+    const res = await runWithGeminiZaiFallback(
+      (ai) =>
+        withTimeout(
+          ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: prompt,
+            config: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: 'application/json',
+              responseSchema,
+            },
+          }),
+          20000
+        ),
+      {
+        userPrompt: prompt,
+        responseSchemaHint: responseSchema,
+        timeoutMs: 20000,
+      }
+    );
 
-    return normalizeHashtagsList(parsed.hashtags || []).slice(0, 5);
+    const parsed = JSON.parse((res.text ?? '{}').trim()) as { hashtags?: string[] };
+    return normalizeHashtagsList(Array.isArray(parsed.hashtags) ? parsed.hashtags : []).slice(
+      0,
+      MAX_TOPIC_HASHTAGS
+    );
   } catch (err) {
-    throw formatAiError(err);
+    throw formatGeminiError(err);
   }
 }
