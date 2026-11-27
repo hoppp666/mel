@@ -384,11 +384,12 @@
     "collection": "romantic",
     "discoveredAt": "2026-11-12T04:00:00.000Z",
     "contentFingerprint": "ночн|лепк|домашних|пельмен|прилет|девушк|спонтанн|шаг|вопрек|усталост|усидчив|попытк|сдел|любим|блюд|рук|отсутств|опыт|стас|боялс|развалятс|кастрюл|алин|мечтал",
-    "status": "ready",
+    "status": "published_to_telegram",
     "storyId": "ML-R-0019",
-    "updatedAt": "2026-11-26T18:17:42.567Z",
+    "updatedAt": "2026-11-27T23:40:32.917Z",
     "contentId": "ML-P-R-000019",
-    "publicationId": "PUB-R-000009"
+    "publicationId": "PUB-R-000009",
+    "telegramMessageId": 35
   },
   {
     "id": "REG-000257",

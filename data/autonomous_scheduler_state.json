@@ -667,12 +667,29 @@
   ],
   "nextScheduledResearchAt": "2026-11-27T17:38:20.334Z",
   "publishedTodayDate": "2026-11-27",
-  "publishedTodayCount": 3,
+  "publishedTodayCount": 4,
   "totalDiscoveredMaterials": 231,
   "totalUniqueStoriesSaved": 0,
   "totalPublicationsCreated": 44,
-  "totalPublishedToTelegram": 20,
+  "totalPublishedToTelegram": 21,
   "runHistory": [
+    {
+      "runId": "RUN-MWZMJQ54",
+      "kind": "publish",
+      "mode": "github_actions",
+      "startedAt": "2026-11-27T23:40:30.480Z",
+      "finishedAt": "2026-11-27T23:40:32.917Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 1,
+      "summary": "Опубликовано в Telegram: PUB-R-000009 (message_id=35). ВК: Дублировано на стену ВК (post_id=24). Ожидает подтверждения Дзена."
+    },
     {
       "runId": "RUN-MWZ4YQBK",
       "kind": "publish",
@@ -1342,29 +1359,12 @@
       "publishedToTelegram": 0,
       "summary": "Обработано сюжетов: 3, создано публикаций: 0.",
       "error": "Превышена квота всех доступных ключей Gemini API (429 RESOURCE_EXHAUSTED). Дождитесь сброса лимита или добавьте дополнительные ключи GEMINI_API_KEY_2..10 в Secrets."
-    },
-    {
-      "runId": "RUN-MWWHYJWB",
-      "kind": "research",
-      "mode": "github_actions",
-      "startedAt": "2026-11-25T19:07:10.733Z",
-      "finishedAt": "2026-11-25T19:08:48.055Z",
-      "ok": true,
-      "discovered": 4,
-      "uniqueAdded": 4,
-      "duplicates": 0,
-      "analyzed": 4,
-      "pendingAnalysis": 0,
-      "storiesApproved": 0,
-      "publicationsCreated": 0,
-      "publishedToTelegram": 0,
-      "summary": "Партия RBATCH-0015 (debate): найдено 4, новых 4, дубликатов 0, проанализировано 4, в базу сюжетов 0."
     }
   ],
   "lastCollectionUsed": "romantic",
   "lastResearchRunAt": "2026-11-27T13:38:20.323Z",
   "lastProductionRunAt": "2026-11-27T13:39:36.682Z",
-  "lastPublishRunAt": "2026-11-27T15:28:19.904Z",
-  "nextScheduledPublishAt": "2026-11-27T15:39:39.064Z",
-  "lastSuccessfulTelegramAt": "2026-11-27T13:39:39.064Z"
+  "lastPublishRunAt": "2026-11-27T23:40:32.917Z",
+  "nextScheduledPublishAt": "2026-11-28T01:40:32.917Z",
+  "lastSuccessfulTelegramAt": "2026-11-27T23:40:32.917Z"
 }
