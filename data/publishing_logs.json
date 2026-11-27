@@ -1,5 +1,29 @@
 [
   {
+    "id": "PLOG-MWZ12YT4-2WXV",
+    "publicationId": "PUB-R-000008",
+    "action": "vk_sent",
+    "status": "vk_published",
+    "detail": "Дублировано на стену ВК (post_id=23).",
+    "createdAt": "2026-11-27T13:39:39.064Z"
+  },
+  {
+    "id": "PLOG-MWZ12XD8-8OQG",
+    "publicationId": "PUB-R-000008",
+    "action": "telegram_sent",
+    "status": "zen_delivery_unconfirmed",
+    "detail": "Отправлено в Telegram (message_id=34). Ожидает фактического подтверждения выхода в Дзене.",
+    "createdAt": "2026-11-27T13:39:37.196Z"
+  },
+  {
+    "id": "PLOG-MWZ12WYV-ISWY",
+    "publicationId": "PUB-R-000013",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-R-0023 (2179/3800 симв., качество 72/100, статус=ready).",
+    "createdAt": "2026-11-27T13:39:36.679Z"
+  },
+  {
     "id": "PLOG-MWYJ2OA0-FKB1",
     "publicationId": "PUB-R-000007",
     "action": "vk_sent",
