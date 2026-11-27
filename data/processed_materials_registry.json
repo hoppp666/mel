@@ -163,11 +163,12 @@
     "collection": "romantic",
     "discoveredAt": "2026-11-12T02:00:00.000Z",
     "contentFingerprint": "нелеп|инцидент|коф|сблизивш|перв|свидан|принят|уязвимост|друг|человек|умен|сбеж|стыд|провал|преврат|ошибк|жив|знакомств|оба|ждал|напряженн|интерв|столик|получил",
-    "status": "ready",
+    "status": "published_to_telegram",
     "storyId": "ML-R-0017",
-    "updatedAt": "2026-11-26T18:15:15.459Z",
+    "updatedAt": "2026-11-27T05:15:32.329Z",
     "contentId": "ML-P-R-000017",
-    "publicationId": "PUB-R-000007"
+    "publicationId": "PUB-R-000007",
+    "telegramMessageId": 33
   },
   {
     "id": "REG-000255",

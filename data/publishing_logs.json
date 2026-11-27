@@ -1,5 +1,21 @@
 [
   {
+    "id": "PLOG-MWYJ2OA0-FKB1",
+    "publicationId": "PUB-R-000007",
+    "action": "vk_sent",
+    "status": "vk_published",
+    "detail": "Дублировано на стену ВК (post_id=22).",
+    "createdAt": "2026-11-27T05:15:32.328Z"
+  },
+  {
+    "id": "PLOG-MWYJ2MR6-PJ4D",
+    "publicationId": "PUB-R-000007",
+    "action": "telegram_sent",
+    "status": "zen_delivery_unconfirmed",
+    "detail": "Отправлено в Telegram (message_id=33). Ожидает фактического подтверждения выхода в Дзене.",
+    "createdAt": "2026-11-27T05:15:30.354Z"
+  },
+  {
     "id": "PLOG-MWYDRAXR-7UC5",
     "publicationId": "PUB-R-000006",
     "action": "vk_sent",
