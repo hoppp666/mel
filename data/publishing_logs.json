@@ -1,5 +1,45 @@
 [
   {
+    "id": "PLOG-MWYDRAXR-7UC5",
+    "publicationId": "PUB-R-000006",
+    "action": "vk_sent",
+    "status": "vk_published",
+    "detail": "Дублировано на стену ВК (post_id=21).",
+    "createdAt": "2026-11-27T02:46:43.743Z"
+  },
+  {
+    "id": "PLOG-MWYDR8MS-XAL4",
+    "publicationId": "PUB-R-000006",
+    "action": "telegram_sent",
+    "status": "zen_delivery_unconfirmed",
+    "detail": "Отправлено в Telegram (message_id=32). Ожидает фактического подтверждения выхода в Дзене.",
+    "createdAt": "2026-11-27T02:46:40.756Z"
+  },
+  {
+    "id": "PLOG-MWYDR8DE-ABBN",
+    "publicationId": "PUB-R-000012",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-R-0022 (1755/3800 симв., качество 78/100, статус=ready).",
+    "createdAt": "2026-11-27T02:46:40.418Z"
+  },
+  {
+    "id": "PLOG-MWYDPXBZ-D858",
+    "publicationId": "PUB-R-000011",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-R-0021 (1363/3800 симв., качество 78/100, статус=ready).",
+    "createdAt": "2026-11-27T02:45:39.455Z"
+  },
+  {
+    "id": "PLOG-MWYDNISY-04Z4",
+    "publicationId": "PUB-R-000010",
+    "action": "autonomous_created",
+    "status": "ready",
+    "detail": "Создана публикация по сюжету ML-R-0020 (1285/3800 симв., качество 72/100, статус=ready).",
+    "createdAt": "2026-11-27T02:43:47.314Z"
+  },
+  {
     "id": "PLOG-MWY63UCM-BZDV",
     "publicationId": "PUB-R-000005",
     "action": "vk_sent",
