@@ -674,6 +674,23 @@
   "totalPublishedToTelegram": 20,
   "runHistory": [
     {
+      "runId": "RUN-MWZ4YQBK",
+      "kind": "publish",
+      "mode": "github_actions",
+      "startedAt": "2026-11-27T15:28:19.904Z",
+      "finishedAt": "2026-11-27T15:28:19.904Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 0,
+      "summary": "Интервал 2 ч. ещё не выдержан. Следующее окно: 2026-11-27T15:39:39.064Z."
+    },
+    {
       "runId": "RUN-MWZ12YT8",
       "kind": "publish",
       "mode": "github_actions",
@@ -1342,29 +1359,12 @@
       "publicationsCreated": 0,
       "publishedToTelegram": 0,
       "summary": "Партия RBATCH-0015 (debate): найдено 4, новых 4, дубликатов 0, проанализировано 4, в базу сюжетов 0."
-    },
-    {
-      "runId": "RUN-MWVXK4X1",
-      "kind": "publish",
-      "mode": "github_actions",
-      "startedAt": "2026-11-25T09:37:43.140Z",
-      "finishedAt": "2026-11-25T09:37:43.141Z",
-      "ok": true,
-      "discovered": 0,
-      "uniqueAdded": 0,
-      "duplicates": 0,
-      "analyzed": 0,
-      "pendingAnalysis": 0,
-      "storiesApproved": 0,
-      "publicationsCreated": 0,
-      "publishedToTelegram": 0,
-      "summary": "Интервал 2 ч. ещё не выдержан. Следующее окно: 2026-11-25T11:01:59.330Z."
     }
   ],
   "lastCollectionUsed": "romantic",
   "lastResearchRunAt": "2026-11-27T13:38:20.323Z",
   "lastProductionRunAt": "2026-11-27T13:39:36.682Z",
-  "lastPublishRunAt": "2026-11-27T13:39:39.064Z",
+  "lastPublishRunAt": "2026-11-27T15:28:19.904Z",
   "nextScheduledPublishAt": "2026-11-27T15:39:39.064Z",
   "lastSuccessfulTelegramAt": "2026-11-27T13:39:39.064Z"
 }
