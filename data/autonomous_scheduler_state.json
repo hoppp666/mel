@@ -711,12 +711,29 @@
   ],
   "nextScheduledResearchAt": "2026-11-28T11:27:36.183Z",
   "publishedTodayDate": "2026-11-28",
-  "publishedTodayCount": 1,
+  "publishedTodayCount": 2,
   "totalDiscoveredMaterials": 243,
   "totalUniqueStoriesSaved": 0,
   "totalPublicationsCreated": 44,
-  "totalPublishedToTelegram": 22,
+  "totalPublishedToTelegram": 23,
   "runHistory": [
+    {
+      "runId": "RUN-MX0LJG3Z",
+      "kind": "publish",
+      "mode": "github_actions",
+      "startedAt": "2026-11-28T16:00:04.370Z",
+      "finishedAt": "2026-11-28T16:00:06.476Z",
+      "ok": true,
+      "discovered": 0,
+      "uniqueAdded": 0,
+      "duplicates": 0,
+      "analyzed": 0,
+      "pendingAnalysis": 0,
+      "storiesApproved": 0,
+      "publicationsCreated": 0,
+      "publishedToTelegram": 1,
+      "summary": "Опубликовано в Telegram: PUB-R-000011 (message_id=37). ВК: Дублировано на стену ВК (post_id=26). Ожидает подтверждения Дзена."
+    },
     {
       "runId": "RUN-MX038D1F",
       "kind": "publish",
@@ -1383,29 +1400,12 @@
       "publicationsCreated": 0,
       "publishedToTelegram": 0,
       "summary": "Партия RBATCH-0018 (romantic): найдено 15, новых 4, дубликатов 11, проанализировано 4, в базу сюжетов 0."
-    },
-    {
-      "runId": "RUN-MWX1Y10J",
-      "kind": "publish",
-      "mode": "github_actions",
-      "startedAt": "2026-11-26T04:28:15.906Z",
-      "finishedAt": "2026-11-26T04:28:15.907Z",
-      "ok": true,
-      "discovered": 0,
-      "uniqueAdded": 0,
-      "duplicates": 0,
-      "analyzed": 0,
-      "pendingAnalysis": 0,
-      "storiesApproved": 0,
-      "publicationsCreated": 0,
-      "publishedToTelegram": 0,
-      "summary": "В очереди нет готовых публикаций (status=ready/scheduled, <=3800 симв.)."
     }
   ],
   "lastCollectionUsed": "romantic",
   "lastResearchRunAt": "2026-11-28T07:27:36.176Z",
   "lastProductionRunAt": "2026-11-28T07:27:36.187Z",
-  "lastPublishRunAt": "2026-11-28T07:27:36.195Z",
-  "nextScheduledPublishAt": "2026-11-28T08:49:19.696Z",
-  "lastSuccessfulTelegramAt": "2026-11-28T06:49:19.696Z"
+  "lastPublishRunAt": "2026-11-28T16:00:06.476Z",
+  "nextScheduledPublishAt": "2026-11-28T18:00:06.476Z",
+  "lastSuccessfulTelegramAt": "2026-11-28T16:00:06.476Z"
 }

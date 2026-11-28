@@ -486,11 +486,12 @@
     "collection": "romantic",
     "discoveredAt": "2026-11-12T06:00:00.000Z",
     "contentFingerprint": "мастер|класс|глин|обычн|вторник|стар|фраз|пам|незначительн|детал|исполн|давн|оброненн|мечт|посред|рабоч|недел|привязк|праздник|кат|готовилас|привычн|очеред|касс",
-    "status": "ready",
+    "status": "published_to_telegram",
     "storyId": "ML-R-0021",
-    "updatedAt": "2026-11-27T02:45:39.456Z",
+    "updatedAt": "2026-11-28T16:00:06.476Z",
     "contentId": "ML-P-R-000021",
-    "publicationId": "PUB-R-000011"
+    "publicationId": "PUB-R-000011",
+    "telegramMessageId": 37
   },
   {
     "id": "REG-000263",

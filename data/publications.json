@@ -142,11 +142,14 @@
       "sourceMatchOk": true,
       "notes": []
     },
-    "status": "ready",
+    "status": "zen_delivery_unconfirmed",
     "idempotencyKey": "PUB-R-000011-ML-R-0021",
     "revisionHistory": [],
     "createdAt": "2026-11-27T02:45:35.428Z",
-    "updatedAt": "2026-11-27T02:45:35.428Z"
+    "updatedAt": "2026-11-28T16:00:04.803Z",
+    "telegramMessageId": 37,
+    "telegramChatId": "-1004469313498",
+    "sentToTelegramAt": "2026-11-28T16:00:04.803Z"
   },
   {
     "publicationId": "PUB-R-000010",
