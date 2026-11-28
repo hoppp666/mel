@@ -367,11 +367,12 @@
     "collection": "romantic",
     "discoveredAt": "2026-11-12T05:00:00.000Z",
     "contentFingerprint": "узконаправленн|светильник|ночн|чтен|жен|принят|уязвимост|друг|человек|обустройств|комфорт|разн|режим|сна|попытк|передел|партнер|марин|ждал|новых|замечан|олег|решил|инженерну",
-    "status": "ready",
+    "status": "published_to_telegram",
     "storyId": "ML-R-0020",
-    "updatedAt": "2026-11-27T02:43:47.315Z",
+    "updatedAt": "2026-11-28T06:49:19.696Z",
     "contentId": "ML-P-R-000020",
-    "publicationId": "PUB-R-000010"
+    "publicationId": "PUB-R-000010",
+    "telegramMessageId": 36
   },
   {
     "id": "REG-000262",
